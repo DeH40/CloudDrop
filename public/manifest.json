@@ -1,0 +1,49 @@
+{
+  "name": "CloudDrop - 安全文件传输",
+  "short_name": "CloudDrop",
+  "description": "安全的点对点文件共享工具，端到端加密",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f0f23",
+  "theme_color": "#0f0f23",
+  "categories": ["utilities", "productivity"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "share_target": {
+    "action": "/",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "files": [
+        {
+          "name": "file",
+          "accept": ["*/*"]
+        }
+      ]
+    }
+  },
+  "shortcuts": [
+    {
+      "name": "分享房间",
+      "short_name": "分享",
+      "description": "分享当前房间号",
+      "url": "/?action=share",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "加入房间",
+      "short_name": "加入",
+      "description": "加入其他房间",
+      "url": "/?action=join",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any" }]
+    }
+  ]
+}

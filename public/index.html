@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="CloudDrop - 安全的点对点文件共享，无需安装，端到端加密">
+  <meta name="theme-color" content="#0f0f23">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="CloudDrop">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="format-detection" content="telephone=no">
+  <title>CloudDrop - 安全 P2P 文件共享</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="apple-touch-icon" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="app" id="app">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo">
+        <svg class="logo-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="24" cy="24" r="20" fill="url(#logoGradient)" opacity="0.2"/>
+          <path d="M24 8L24 28M24 28L32 20M24 28L16 20" stroke="url(#logoGradient)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M12 32L12 36C12 38.2091 13.7909 40 16 40L32 40C34.2091 40 36 38.2091 36 36L36 32" stroke="url(#logoGradient)" stroke-width="3" stroke-linecap="round"/>
+          <defs>
+            <linearGradient id="logoGradient" x1="8" y1="8" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#60a5fa"/>
+              <stop offset="1" stop-color="#a78bfa"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <span class="logo-text">CloudDrop</span>
+      </div>
+      <div class="header-right">
+        <div class="device-name-info">
+          <span class="device-label">设备别名:</span>
+          <span class="device-name" id="deviceName">-</span>
+          <button class="btn-icon" id="editDeviceName" title="修改设备别名">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+        </div>
+        <div class="room-info" id="roomInfo">
+          <span class="room-label">房间号:</span>
+          <span class="room-code" id="roomCode">-</span>
+          <button class="btn-icon" id="copyRoomCode" title="复制房间号">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          </button>
+          <div style="width: 1px; height: 16px; background: rgba(255,255,255,0.1); margin: 0 4px;"></div>
+          <button class="btn-icon" id="joinRoomBtn" title="加入其他房间">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+            </svg>
+          </button>
+        </div>
+        <span class="connection-status" id="connectionStatus">
+          <span class="status-dot"></span>
+          <span class="status-text">连接中...</span>
+        </span>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main">
+      <!-- Empty State -->
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">
+          <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="60" cy="60" r="50" stroke="url(#emptyGradient)" stroke-width="2" stroke-dasharray="8 4" opacity="0.5"/>
+            <circle cx="60" cy="60" r="30" fill="url(#emptyGradient)" opacity="0.1"/>
+            <path d="M60 40V70M60 70L72 58M60 70L48 58" stroke="url(#emptyGradient)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M42 76H78" stroke="url(#emptyGradient)" stroke-width="3" stroke-linecap="round"/>
+            <defs>
+              <linearGradient id="emptyGradient" x1="10" y1="10" x2="110" y2="110" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#60a5fa"/>
+                <stop offset="1" stop-color="#a78bfa"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <h2 class="empty-title">等待设备加入</h2>
+        <p class="empty-description">在同一网络中打开此页面的其他设备将自动出现在这里</p>
+        <!-- Mobile empty state actions -->
+        <div class="empty-state-actions">
+          <button class="empty-action-btn primary" id="emptyShareRoom">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+            分享房间号
+          </button>
+          <button class="empty-action-btn" id="emptyJoinRoom">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            加入其他房间
+          </button>
+        </div>
+      </div>
+
+      <!-- Peers Grid -->
+      <div class="peers-grid" id="peersGrid"></div>
+    </main>
+
+    <!-- Security Features Section -->
+    <section class="security-section" id="securitySection">
+      <div class="security-header">
+        <div class="security-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="url(#securityGradient)" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/>
+            <defs>
+              <linearGradient id="securityGradient" x1="4" y1="2" x2="20" y2="22" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#60a5fa"/>
+                <stop offset="1" stop-color="#a78bfa"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <h2 class="security-title">安全至上，隐私无忧</h2>
+        <p class="security-subtitle">我们采用业界领先的安全技术，确保您的文件传输安全可靠</p>
+      </div>
+      
+      <div class="security-grid">
+        <div class="security-card" data-tooltip="采用 AES-256-GCM 加密算法，文件在传输前即被加密，只有接收方可以解密，即使数据被截获也无法读取">
+          <div class="security-card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+          </div>
+          <h3 class="security-card-title">端到端加密</h3>
+          <p class="security-card-desc">采用 AES-256-GCM 加密算法，文件在传输前即被加密，只有接收方可以解密</p>
+        </div>
+        
+        <div class="security-card" data-tooltip="文件不经过任何服务器存储，数据直接在设备间传输，传输完成后自动销毁，不留任何痕迹">
+          <div class="security-card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 6v6l4 2"/>
+            </svg>
+          </div>
+          <h3 class="security-card-title">无服务器存储</h3>
+          <p class="security-card-desc">文件不经过任何服务器存储，传输完成即销毁，不留任何痕迹</p>
+        </div>
+        
+        <div class="security-card" data-tooltip="优先基于 WebRTC 技术实现设备间点对点直连，无需中转服务器，传输速度更快、延迟更低、隐私更有保障">
+          <div class="security-card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+          </div>
+          <h3 class="security-card-title">P2P 直连传输</h3>
+          <p class="security-card-desc">优先基于 WebRTC 技术，设备间点对点直连，传输速度更快、更私密</p>
+        </div>
+        
+        <div class="security-card" data-tooltip="完整源代码开源在 GitHub，接受全球开发者和安全专家审查，安全性经得起公开检验">
+          <div class="security-card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="9" y1="15" x2="15" y2="15"/>
+            </svg>
+          </div>
+          <h3 class="security-card-title">开源透明</h3>
+          <p class="security-card-desc">代码完全开源，接受社区审查，安全性经得起检验</p>
+        </div>
+      </div>
+
+      <div class="security-footer">
+        <span class="security-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+            <polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+          零知识架构
+        </span>
+        <span class="security-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+            <polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+          无需注册登录
+        </span>
+        <span class="security-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+            <polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+          无数据收集
+        </span>
+      </div>
+    </section>
+
+    <!-- Drop Zone Overlay -->
+    <div class="drop-zone" id="dropZone">
+      <div class="drop-zone-content">
+        <svg class="drop-icon" viewBox="0 0 80 80" fill="none">
+          <circle cx="40" cy="40" r="35" stroke="currentColor" stroke-width="2" stroke-dasharray="8 4"/>
+          <path d="M40 25V50M40 50L52 38M40 50L28 38" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <p class="drop-text">释放以发送文件</p>
+      </div>
+    </div>
+
+    <!-- Transfer Modal -->
+    <div class="modal" id="transferModal">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title" id="modalTitle">正在传输</h3>
+          <button class="modal-close" id="modalClose">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="transfer-info">
+            <span class="file-name" id="transferFileName">-</span>
+            <span class="file-size" id="transferFileSize">-</span>
+          </div>
+          <div class="progress-container">
+            <div class="progress-bar" id="transferProgress"></div>
+          </div>
+          <div class="transfer-stats">
+            <span id="transferPercent">0%</span>
+            <span id="transferSpeed">- KB/s</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Receive Modal -->
+    <div class="modal" id="receiveModal">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title">接收文件</h3>
+          <button class="modal-close" id="receiveModalClose">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="receive-prompt" id="receivePrompt">-</p>
+          <div class="receive-actions">
+            <button class="btn btn-secondary" id="receiveDecline">拒绝</button>
+            <button class="btn btn-primary" id="receiveAccept">接受</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Text Modal -->
+    <div class="modal" id="textModal">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title">发送文本</h3>
+          <button class="modal-close" id="textModalClose">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <textarea class="text-input" id="textInput" placeholder="输入要发送的文本..."></textarea>
+          <div class="text-actions">
+            <button class="btn btn-secondary" id="textCancel">取消</button>
+            <button class="btn btn-primary" id="textSend">发送</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Received Text Modal -->
+    <div class="modal" id="receivedTextModal">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title">收到文本消息</h3>
+          <button class="modal-close" id="receivedTextModalClose">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="received-from" id="receivedFrom">来自: -</p>
+          <div class="received-text" id="receivedText"></div>
+          <div class="receive-actions">
+            <button class="btn btn-secondary" id="copyText">复制</button>
+            <button class="btn btn-primary" id="closeReceivedText">关闭</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Device Name Modal -->
+    <div class="modal" id="editNameModal">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title">修改设备名称</h3>
+          <button class="modal-close" id="editNameModalClose">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-description">设置一个友好的名称，方便其他设备识别</p>
+          <input type="text" class="name-input" id="nameInput" placeholder="输入设备名称" maxlength="20">
+          <div class="text-actions">
+            <button class="btn btn-secondary" id="editNameCancel">取消</button>
+            <button class="btn btn-primary" id="editNameConfirm">确定</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Join Room Modal -->
+    <div class="modal" id="joinRoomModal">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title">加入房间</h3>
+          <button class="modal-close" id="joinRoomModalClose">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-description">输入房间号以加入其他设备所在的房间</p>
+          <input type="text" class="room-input" id="roomInput" placeholder="输入 4-16 位房间号" maxlength="16" pattern="[a-zA-Z0-9]*">
+          <div class="text-actions">
+            <button class="btn btn-secondary" id="joinRoomCancel">取消</button>
+            <button class="btn btn-primary" id="joinRoomConfirm">加入</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Message History Panel -->
+    <div class="chat-panel" id="chatPanel">
+      <div class="chat-header">
+        <h4 class="chat-title" id="chatTitle">消息记录</h4>
+        <button class="btn-icon" id="closeChatPanel">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="chat-messages" id="chatMessages"></div>
+      <div class="chat-input-container">
+        <input type="text" class="chat-input" id="chatInput" placeholder="输入消息..." maxlength="500">
+        <button class="btn-icon btn-send" id="sendChatMessage">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Mobile Bottom Navigation Bar -->
+    <nav class="mobile-bottom-bar" id="mobileBottomBar">
+      <div class="mobile-bottom-bar-inner">
+        <button class="mobile-nav-btn" id="navDevices" data-nav="devices">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <rect x="2" y="3" width="20" height="14" rx="2"/>
+            <path d="M8 21h8M12 17v4"/>
+          </svg>
+          <span class="mobile-nav-label">设备</span>
+        </button>
+        
+        <button class="mobile-nav-btn" id="navRoom" data-nav="room">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+            <polyline points="9 22 9 12 15 12 15 22"/>
+          </svg>
+          <span class="mobile-nav-label">房间</span>
+        </button>
+        
+        <button class="mobile-nav-btn primary" id="navSend" data-nav="send">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+          <span class="mobile-nav-label">发送</span>
+        </button>
+        
+        <button class="mobile-nav-btn" id="navShare" data-nav="share">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <circle cx="18" cy="5" r="3"/>
+            <circle cx="6" cy="12" r="3"/>
+            <circle cx="18" cy="19" r="3"/>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+          </svg>
+          <span class="mobile-nav-label">分享</span>
+        </button>
+        
+        <button class="mobile-nav-btn" id="navSettings" data-nav="settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+          </svg>
+          <span class="mobile-nav-label">设置</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- Mobile Quick Actions Panel -->
+    <div class="mobile-quick-actions" id="mobileQuickActions">
+      <div class="quick-action-header">
+        <span class="quick-action-title" id="quickActionTitle">发送到...</span>
+        <button class="quick-action-close" id="quickActionClose">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <button class="quick-action-btn" id="quickSendFile">
+        <div class="quick-action-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </div>
+        <div class="quick-action-text">
+          <span class="quick-action-name">发送文件</span>
+          <span class="quick-action-desc">选择文件发送给设备</span>
+        </div>
+      </button>
+      <button class="quick-action-btn" id="quickSendText">
+        <div class="quick-action-icon" style="background: linear-gradient(135deg, #a78bfa 0%, #f472b6 100%);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        </div>
+        <div class="quick-action-text">
+          <span class="quick-action-name">发送文字</span>
+          <span class="quick-action-desc">发送文字消息或链接</span>
+        </div>
+      </button>
+    </div>
+
+    <!-- Mobile Settings Panel -->
+    <div class="modal" id="mobileSettingsModal">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title">设置</h3>
+          <button class="modal-close" id="mobileSettingsClose">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="settings-section">
+            <label class="settings-label">设备名称</label>
+            <div class="settings-row">
+              <span class="settings-value" id="settingsDeviceName">-</span>
+              <button class="btn btn-secondary btn-sm" id="settingsEditName">修改</button>
+            </div>
+          </div>
+          <div class="settings-section">
+            <label class="settings-label">当前房间</label>
+            <div class="settings-row">
+              <span class="settings-value settings-room" id="settingsRoomCode">-</span>
+              <button class="btn btn-secondary btn-sm" id="settingsCopyRoom">复制</button>
+            </div>
+          </div>
+          <div class="settings-section">
+            <label class="settings-label">连接状态</label>
+            <div class="settings-row">
+              <span class="settings-value" id="settingsStatus">
+                <span class="status-dot"></span>
+                <span id="settingsStatusText">连接中...</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile Share Panel -->
+    <div class="modal" id="mobileShareModal">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title">分享房间</h3>
+          <button class="modal-close" id="mobileShareClose">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="modal-body share-body">
+          <div class="share-room-display">
+            <span class="share-room-code" id="shareRoomCode">-</span>
+          </div>
+          <p class="share-hint">让其他设备加入此房间号即可互传文件</p>
+          <div class="share-actions">
+            <button class="btn btn-primary" id="shareCopyLink">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+              复制链接
+            </button>
+            <button class="btn btn-secondary" id="shareNative">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+              更多方式
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>
