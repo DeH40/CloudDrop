@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  现代化、安全的点对点文件共享工具，基于 Cloudflare Workers 构建。
+  <strong>现代化、安全的点对点文件共享工具，基于 Cloudflare Workers 构建。</strong>
 </p>
 
 <p align="center">
@@ -15,18 +15,40 @@
   <a href="#开发">开发</a>
 </p>
 
+<p align="center">
+  <img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare Workers">
+  <img src="https://img.shields.io/badge/WebRTC-P2P-333333?logo=webrtc&logoColor=white" alt="WebRTC">
+  <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License">
+</p>
+
 ---
 
 ## ✨ 特性
 
+### 核心功能
 - 🚀 **即时分享** - 同一网络内的设备即时发现，快速传输
-- 🔒 **端到端加密** - 使用 WebCrypto API 进行所有传输加密
+- 🔒 **端到端加密** - 使用 AES-256-GCM 加密所有传输
 - 🌐 **点对点传输** - 通过 WebRTC 直接传输，无服务器存储
 - ☁️ **Cloudflare 驱动** - 基于 Cloudflare Workers 全球边缘部署
 - 📱 **渐进式 Web 应用** - 可安装为原生应用
 - 🔗 **房间分享** - 通过房间号与任何人连接
 - 💬 **安全消息** - 设备间发送加密文本消息
-- 🎨 **精美界面** - 现代深色主题，流畅动画
+- 🎨 **精美界面** - 现代深色主题，毛玻璃效果，流畅动画
+
+### 高级功能
+- 🔐 **加密房间** - 创建密码保护的房间，双重加密
+- 🔄 **智能中继降级** - P2P 连接失败时自动降级到中继模式（≤5秒检测）
+- 🔁 **后台 P2P 恢复** - 降级后静默尝试恢复 P2P 连接
+- ✅ **设备信任** - 信任的设备自动接收文件
+- ⏹️ **传输控制** - 随时取消进行中的传输
+- 📊 **连接模式指示** - 可视化显示 P2P 或中继模式
+- 📲 **移动端优化** - 触摸友好的 UI，底部导航栏
+
+## 🖼️ 截图
+
+<p align="center">
+  <i>现代深色主题，直观的设备发现界面</i>
+</p>
 
 ## 🚀 一键部署
 
@@ -89,13 +111,13 @@ npx wrangler secret put TURN_KEY_API_TOKEN
 cloudDrop/
 ├── public/              # 静态资源
 │   ├── index.html       # 主 HTML 文件
-│   ├── style.css        # 样式表
+│   ├── style.css        # 样式（深色主题 + 毛玻璃效果）
 │   ├── manifest.json    # PWA 清单
 │   └── js/
 │       ├── app.js       # 主应用逻辑
-│       ├── ui.js        # UI 组件
-│       ├── webrtc.js    # WebRTC 连接处理
-│       └── crypto.js    # 加密工具
+│       ├── ui.js        # UI 组件和辅助函数
+│       ├── webrtc.js    # WebRTC + 中继降级 + P2P 恢复
+│       └── crypto.js    # 加密（AES-GCM + 房间密码）
 ├── src/
 │   ├── index.ts         # Worker 入口
 │   └── room.ts          # WebSocket 房间的 Durable Object
@@ -105,11 +127,21 @@ cloudDrop/
 
 ## 🔧 技术栈
 
-- **运行时**: Cloudflare Workers
-- **实时通信**: WebSocket + Durable Objects
-- **文件传输**: WebRTC Data Channels
-- **加密**: Web Crypto API (AES-GCM)
-- **前端**: 原生 JavaScript + CSS
+- **运行时**: Cloudflare Workers + Durable Objects
+- **实时通信**: WebSocket 用于信令
+- **文件传输**: WebRTC Data Channels (P2P) + WebSocket 中继（备用）
+- **加密**: Web Crypto API (AES-256-GCM, ECDH 密钥交换)
+- **前端**: 原生 JavaScript + 现代 CSS
+
+## 🔒 安全性
+
+CloudDrop 实现了多层安全保护：
+
+1. **传输加密** - 所有 WebRTC 连接使用 DTLS
+2. **应用加密** - 使用会话密钥的 AES-256-GCM
+3. **密钥交换** - ECDH (P-256) 安全密钥协商
+4. **房间密码** - 可选的密码保护，使用 PBKDF2 派生
+5. **零知识架构** - 服务器永远不会看到文件内容或加密密钥
 
 ## 📄 许可证
 

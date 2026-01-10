@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  A modern, secure peer-to-peer file sharing tool built on Cloudflare Workers.
+  <strong>A modern, secure peer-to-peer file sharing tool built on Cloudflare Workers.</strong>
 </p>
 
 <p align="center">
@@ -15,18 +15,40 @@
   <a href="#development">Development</a>
 </p>
 
+<p align="center">
+  <img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare Workers">
+  <img src="https://img.shields.io/badge/WebRTC-P2P-333333?logo=webrtc&logoColor=white" alt="WebRTC">
+  <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License">
+</p>
+
 ---
 
 ## ✨ Features
 
+### Core Features
 - 🚀 **Instant Sharing** - Share files with anyone on the same network instantly
-- 🔒 **End-to-End Encryption** - All transfers are encrypted using WebCrypto API
+- 🔒 **End-to-End Encryption** - All transfers encrypted using AES-256-GCM
 - 🌐 **P2P Transfer** - Direct peer-to-peer transfer via WebRTC, no server storage
 - ☁️ **Cloudflare Powered** - Built on Cloudflare Workers for global edge deployment
 - 📱 **Progressive Web App** - Install as a native app on any device
 - 🔗 **Room Sharing** - Share a room code to connect with anyone, anywhere
 - 💬 **Secure Messaging** - Send encrypted text messages between devices
-- 🎨 **Beautiful UI** - Modern dark theme with smooth animations
+- 🎨 **Beautiful UI** - Modern dark theme with glassmorphism and smooth animations
+
+### Advanced Features
+- 🔐 **Encrypted Rooms** - Create password-protected rooms with double encryption
+- 🔄 **Smart Relay Fallback** - Auto fallback to relay mode when P2P fails (≤5s detection)
+- 🔁 **Background P2P Recovery** - Silently attempts to restore P2P after relay fallback
+- ✅ **Device Trust** - Trust devices to auto-accept file transfers
+- ⏹️ **Transfer Control** - Cancel ongoing transfers at any time
+- 📊 **Connection Indicator** - Visual indicator showing P2P or relay mode
+- 📲 **Mobile Optimized** - Touch-friendly UI with bottom navigation bar
+
+## 🖼️ Screenshots
+
+<p align="center">
+  <i>Modern dark theme with intuitive peer discovery</i>
+</p>
 
 ## 🚀 One-Click Deploy
 
@@ -89,13 +111,13 @@ Without TURN configuration, CloudDrop will use public STUN servers for WebRTC co
 cloudDrop/
 ├── public/              # Static assets
 │   ├── index.html       # Main HTML file
-│   ├── style.css        # Styles
+│   ├── style.css        # Styles (dark theme + glassmorphism)
 │   ├── manifest.json    # PWA manifest
 │   └── js/
 │       ├── app.js       # Main application logic
-│       ├── ui.js        # UI components
-│       ├── webrtc.js    # WebRTC connection handling
-│       └── crypto.js    # Encryption utilities
+│       ├── ui.js        # UI components & helpers
+│       ├── webrtc.js    # WebRTC + relay fallback + P2P recovery
+│       └── crypto.js    # Encryption (AES-GCM + room password)
 ├── src/
 │   ├── index.ts         # Worker entry point
 │   └── room.ts          # Durable Object for WebSocket rooms
@@ -105,11 +127,21 @@ cloudDrop/
 
 ## 🔧 Tech Stack
 
-- **Runtime**: Cloudflare Workers
-- **Real-time**: WebSocket + Durable Objects
-- **Transfer**: WebRTC Data Channels
-- **Encryption**: Web Crypto API (AES-GCM)
-- **Frontend**: Vanilla JavaScript + CSS
+- **Runtime**: Cloudflare Workers + Durable Objects
+- **Real-time**: WebSocket for signaling
+- **Transfer**: WebRTC Data Channels (P2P) + WebSocket relay (fallback)
+- **Encryption**: Web Crypto API (AES-256-GCM, ECDH key exchange)
+- **Frontend**: Vanilla JavaScript + Modern CSS
+
+## 🔒 Security
+
+CloudDrop implements multiple layers of security:
+
+1. **Transport Encryption** - All WebRTC connections use DTLS
+2. **Application Encryption** - AES-256-GCM with per-session keys
+3. **Key Exchange** - ECDH (P-256) for secure key negotiation
+4. **Room Passwords** - Optional password protection with PBKDF2 derivation
+5. **Zero Knowledge** - Server never sees file contents or encryption keys
 
 ## 📄 License
 
