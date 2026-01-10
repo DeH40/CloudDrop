@@ -46,9 +46,28 @@
 
 ## 🖼️ Screenshots
 
-<p align="center">
-  <i>Modern dark theme with intuitive peer discovery</i>
-</p>
+<table>
+  <tr>
+    <td align="center">
+      <img src="docs/screenshots/desktop-main.png" width="400" alt="Desktop Main Interface">
+      <br><em>Desktop - Peer Discovery</em>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/desktop-transfer.png" width="400" alt="File Transfer">
+      <br><em>Desktop - File Transfer</em>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="docs/screenshots/mobile-main.png" width="200" alt="Mobile Interface">
+      <br><em>Mobile - Main Interface</em>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/mobile-share.png" width="200" alt="Mobile Share">
+      <br><em>Mobile - Room Sharing</em>
+    </td>
+  </tr>
+</table>
 
 ## 🚀 One-Click Deploy
 

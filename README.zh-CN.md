@@ -46,9 +46,28 @@
 
 ## 🖼️ 截图
 
-<p align="center">
-  <i>现代深色主题，直观的设备发现界面</i>
-</p>
+<table>
+  <tr>
+    <td align="center">
+      <img src="docs/screenshots/desktop-main.png" width="400" alt="桌面端主界面">
+      <br><em>桌面端 - 设备发现</em>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/desktop-transfer.png" width="400" alt="文件传输">
+      <br><em>桌面端 - 文件传输</em>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="docs/screenshots/mobile-main.png" width="200" alt="移动端界面">
+      <br><em>移动端 - 主界面</em>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/mobile-share.png" width="200" alt="移动端分享">
+      <br><em>移动端 - 房间分享</em>
+    </td>
+  </tr>
+</table>
 
 ## 🚀 一键部署
 
