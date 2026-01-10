@@ -109,7 +109,6 @@ async function handleIceServers(env: Env): Promise<Response> {
     // China-accessible STUN servers (prioritized)
     { urls: 'stun:stun.miwifi.com:3478' },      // Xiaomi - China
     { urls: 'stun:stun.yy.com:3478' },          // YY - China
-    { urls: 'stun:stun.qq.com:3478' },          // Tencent - China
     // Global STUN servers
     { urls: 'stun:stun.cloudflare.com:3478' },  // Cloudflare
     { urls: 'stun:stun.syncthing.net:3478' },   // Syncthing
