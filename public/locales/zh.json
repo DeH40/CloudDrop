@@ -15,7 +15,8 @@
     "disconnected": "已断开",
     "confirmAction": "确认操作",
     "confirmMessage": "您确定要执行此操作吗?",
-    "github": "GitHub"
+    "github": "GitHub",
+    "join": "加入房间"
   },
   "deviceNames": {
     "adjectives": ["敏捷", "明亮", "酷炫", "迅速", "优雅", "飞速", "灵动", "沉稳"],

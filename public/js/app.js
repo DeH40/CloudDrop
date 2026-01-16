@@ -399,6 +399,19 @@ class CloudDrop {
     // Initialize display
     updateLanguageDisplay();
 
+    // Toggle menu on button click (for mobile touch devices)
+    languageBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      languageMenu.classList.toggle('show');
+    });
+
+    // Close menu when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!languageBtn.contains(e.target) && !languageMenu.contains(e.target)) {
+        languageMenu.classList.remove('show');
+      }
+    });
+
     // Language menu item clicks
     languageMenu.querySelectorAll('.language-menu-item').forEach(item => {
       item.addEventListener('click', async () => {
@@ -407,6 +420,8 @@ class CloudDrop {
           await i18n.changeLocale(lang);
           updateLanguageDisplay();
         }
+        // Close menu after selection
+        languageMenu.classList.remove('show');
       });
     });
 
@@ -837,6 +852,7 @@ class CloudDrop {
       fileId: fileId,
       name: data.name,
       size: data.size,
+      mimeType: data.mimeType || 'application/octet-stream', // Save MIME type
       totalChunks: data.totalChunks,
       chunks: [],
       received: 0,
@@ -2001,6 +2017,13 @@ class CloudDrop {
     // Toggle popover on share button click
     shareBtn.addEventListener('click', (e) => {
       e.stopPropagation();
+
+      // On mobile, show mobile share modal instead of popover
+      if (ui.isMobile()) {
+        this.showMobileShareModal();
+        return;
+      }
+
       if (popover.classList.contains('active')) {
         hidePopover();
       } else {
@@ -2424,7 +2447,10 @@ class CloudDrop {
 
   // Show mobile share modal
   showMobileShareModal() {
-    document.getElementById('shareRoomCode').textContent = this.roomCode;
+    const shareRoomCodeEl = document.getElementById('shareRoomCode');
+    if (shareRoomCodeEl) {
+      shareRoomCodeEl.textContent = this.roomCode;
+    }
     ui.showModal('mobileShareModal');
   }
 

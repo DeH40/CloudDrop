@@ -1008,6 +1008,7 @@ export class WebRTCManager {
           fileId,
           name: file.name,
           size: file.size,
+          mimeType: file.type || 'application/octet-stream', // Add MIME type
           totalChunks: Math.ceil(file.size / CHUNK_SIZE),
           transferMode: isRelayMode ? 'relay' : 'p2p'
         }
@@ -1167,6 +1168,7 @@ export class WebRTCManager {
       fileId,
       name: file.name,
       size: file.size,
+      mimeType: file.type || 'application/octet-stream', // Add MIME type
       totalChunks
     }));
 
@@ -1250,6 +1252,7 @@ export class WebRTCManager {
         fileId,
         name: file.name,
         size: file.size,
+        mimeType: file.type || 'application/octet-stream', // Add MIME type
         totalChunks
       }
     });
@@ -1327,6 +1330,7 @@ export class WebRTCManager {
           // Initialize new transfer
           this.incomingTransfers.set(peerId, {
             fileId: msg.fileId, name: msg.name, size: msg.size,
+            mimeType: msg.mimeType || 'application/octet-stream', // Save MIME type
             totalChunks: msg.totalChunks, chunks: [], received: 0, startTime: Date.now(),
             confirmed: true // Mark as confirmed since it's already starting
           });
@@ -1340,7 +1344,7 @@ export class WebRTCManager {
       } else if (msg.type === 'file-end') {
         const transfer = this.incomingTransfers.get(peerId);
         if (transfer) {
-          const blob = new Blob(transfer.chunks);
+          const blob = new Blob(transfer.chunks, { type: transfer.mimeType || 'application/octet-stream' }); // Use MIME type
           if (this.onFileReceived) this.onFileReceived(peerId, transfer.name, blob);
           this.incomingTransfers.delete(peerId);
           this.activeTransfers.delete(transfer.fileId);
@@ -1395,6 +1399,7 @@ export class WebRTCManager {
         // Initialize new transfer
         this.incomingTransfers.set(peerId, {
           fileId: data.fileId, name: data.name, size: data.size,
+          mimeType: data.mimeType || 'application/octet-stream', // Save MIME type
           totalChunks: data.totalChunks, chunks: [], received: 0, startTime: Date.now(),
           confirmed: true
         });
@@ -1411,7 +1416,7 @@ export class WebRTCManager {
     } else if (data.type === 'file-end') {
       const transfer = this.incomingTransfers.get(peerId);
       if (transfer) {
-        const blob = new Blob(transfer.chunks);
+        const blob = new Blob(transfer.chunks, { type: transfer.mimeType || 'application/octet-stream' }); // Use MIME type
         if (this.onFileReceived) this.onFileReceived(peerId, transfer.name, blob);
         this.incomingTransfers.delete(peerId);
         this.activeTransfers.delete(transfer.fileId);

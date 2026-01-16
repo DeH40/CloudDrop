@@ -26,5 +26,12 @@ Thumbs.db
 # Build output
 dist/
 
+## AI releated
 # spec-workflow
 .spec-workflow/
+
+#serena
+.serena/
+
+#claude
+.claude/

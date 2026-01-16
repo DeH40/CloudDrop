@@ -1822,7 +1822,7 @@ body::before {
     flex: 1;
     justify-content: flex-end;
     align-items: center;
-    overflow: hidden;
+    overflow: visible; /* 改为visible以允许下拉菜单显示 */
   }
   
   /* 设备名称和房间号 - 胶囊样式 */
@@ -3120,9 +3120,10 @@ body::before {
   display: block;
 }
 
-/* Hide desktop share popover on mobile */
+/* Hide desktop share popover and overlay on mobile */
 @media (max-width: 640px) {
-  .share-popover {
+  .share-popover,
+  .share-popover-overlay {
     display: none !important;
   }
 }
@@ -4440,7 +4441,8 @@ html {
 }
 
 .language-switcher:hover .language-menu,
-.language-menu:hover {
+.language-menu:hover,
+.language-menu.show {
   opacity: 1;
   visibility: visible;
   transform: translateY(0) scale(1);
@@ -4530,7 +4532,8 @@ html {
   }
 
   .language-switcher:hover .language-menu,
-  .language-menu:hover {
+  .language-menu:hover,
+  .language-menu.show {
     transform: translateX(-50%) translateY(0) scale(1);
   }
 
