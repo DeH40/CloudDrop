@@ -1,4 +1,11 @@
 {
+  "seo": {
+    "title": "CloudDrop - Secure P2P File Sharing",
+    "description": "CloudDrop - Secure peer-to-peer file sharing, no installation needed, end-to-end encrypted, cross-device transfer",
+    "keywords": "file transfer,P2P,end-to-end encryption,file sharing,WebRTC,secure transfer,cross-device",
+    "ogTitle": "CloudDrop - Secure P2P File Sharing",
+    "ogDescription": "Secure peer-to-peer file sharing tool, no installation needed, end-to-end encrypted, instant cross-device transfer"
+  },
   "common": {
     "ok": "OK",
     "cancel": "Cancel",

@@ -225,6 +225,132 @@ export class I18n {
 
     // Update HTML lang attribute
     document.documentElement.lang = this.getLanguageTag(this.locale);
+
+    // Update SEO meta tags
+    this.updateSEO();
+  }
+
+  /**
+   * Update SEO-related meta tags and document title
+   */
+  updateSEO() {
+    // Update document title
+    const title = this.t('seo.title');
+    if (title && title !== 'seo.title') {
+      document.title = title;
+    }
+
+    // Update meta description
+    const description = this.t('seo.description');
+    if (description && description !== 'seo.description') {
+      this.updateMetaTag('description', description);
+    }
+
+    // Update meta keywords
+    const keywords = this.t('seo.keywords');
+    if (keywords && keywords !== 'seo.keywords') {
+      this.updateMetaTag('keywords', keywords);
+    }
+
+    // Update Open Graph tags
+    const ogTitle = this.t('seo.ogTitle');
+    if (ogTitle && ogTitle !== 'seo.ogTitle') {
+      this.updateMetaTag('og:title', ogTitle, 'property');
+    }
+
+    const ogDescription = this.t('seo.ogDescription');
+    if (ogDescription && ogDescription !== 'seo.ogDescription') {
+      this.updateMetaTag('og:description', ogDescription, 'property');
+    }
+
+    // Update og:locale
+    this.updateMetaTag('og:locale', this.getOgLocale(this.locale), 'property');
+
+    // Update Twitter Card tags
+    if (ogTitle && ogTitle !== 'seo.ogTitle') {
+      this.updateMetaTag('twitter:title', ogTitle);
+    }
+    if (ogDescription && ogDescription !== 'seo.ogDescription') {
+      this.updateMetaTag('twitter:description', ogDescription);
+    }
+
+    // Update canonical URL with lang parameter
+    this.updateCanonicalUrl();
+
+    // Update hreflang alternate links
+    this.updateHreflangLinks();
+  }
+
+  /**
+   * Update or create a meta tag
+   * @param {string} name - Meta tag name or property
+   * @param {string} content - Meta tag content
+   * @param {string} attribute - Attribute type ('name' or 'property')
+   */
+  updateMetaTag(name, content, attribute = 'name') {
+    let meta = document.querySelector(`meta[${attribute}="${name}"]`);
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.setAttribute(attribute, name);
+      document.head.appendChild(meta);
+    }
+    meta.setAttribute('content', content);
+  }
+
+  /**
+   * Get Open Graph locale format
+   * @param {string} locale - Locale code
+   * @returns {string} OG locale (e.g., 'zh_CN', 'en_US', 'ja_JP')
+   */
+  getOgLocale(locale) {
+    const ogLocales = {
+      'en': 'en_US',
+      'zh': 'zh_CN',
+      'ja': 'ja_JP'
+    };
+    return ogLocales[locale] || 'en_US';
+  }
+
+  /**
+   * Update canonical URL
+   */
+  updateCanonicalUrl() {
+    const baseUrl = window.location.origin + window.location.pathname;
+    const canonicalUrl = `${baseUrl}?lang=${this.locale}`;
+
+    let canonical = document.querySelector('link[rel="canonical"]');
+    if (!canonical) {
+      canonical = document.createElement('link');
+      canonical.setAttribute('rel', 'canonical');
+      document.head.appendChild(canonical);
+    }
+    canonical.setAttribute('href', canonicalUrl);
+  }
+
+  /**
+   * Update hreflang alternate links for SEO
+   */
+  updateHreflangLinks() {
+    const baseUrl = window.location.origin + window.location.pathname;
+
+    // Remove existing hreflang links
+    document.querySelectorAll('link[rel="alternate"][hreflang]').forEach(el => el.remove());
+
+    // Add hreflang links for all supported locales
+    this.supportedLocales.forEach(locale => {
+      const link = document.createElement('link');
+      link.setAttribute('rel', 'alternate');
+      link.setAttribute('hreflang', this.getLanguageTag(locale));
+      link.setAttribute('href', `${baseUrl}?lang=${locale}`);
+      document.head.appendChild(link);
+    });
+
+    // Add x-default hreflang (points to default locale)
+    const defaultLink = document.createElement('link');
+    defaultLink.setAttribute('rel', 'alternate');
+    defaultLink.setAttribute('hreflang', 'x-default');
+    defaultLink.setAttribute('href', `${baseUrl}?lang=${this.fallbackLocale}`);
+    document.head.appendChild(defaultLink);
   }
 
   /**

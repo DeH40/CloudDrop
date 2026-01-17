@@ -1,4 +1,11 @@
 {
+  "seo": {
+    "title": "CloudDrop - 安全 P2P 文件共享",
+    "description": "CloudDrop - 安全的点对点文件共享，无需安装，端到端加密，支持跨设备传输",
+    "keywords": "文件传输,P2P,端到端加密,文件共享,WebRTC,安全传输,跨设备传输",
+    "ogTitle": "CloudDrop - 安全 P2P 文件共享",
+    "ogDescription": "安全的点对点文件共享工具，无需安装，端到端加密，支持跨设备即时传输"
+  },
   "common": {
     "ok": "确定",
     "cancel": "取消",
