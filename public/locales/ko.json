@@ -26,8 +26,26 @@
     "join": "방 참가"
   },
   "deviceNames": {
-    "adjectives": ["민첩한", "밝은", "멋진", "빠른", "우아한", "날으는", "기민한", "안정적인"],
-    "nouns": ["봉황", "용", "호랑이", "독수리", "매", "페가수스", "사슴", "늑대"]
+    "adjectives": [
+      "민첩한",
+      "밝은",
+      "멋진",
+      "빠른",
+      "우아한",
+      "날으는",
+      "기민한",
+      "안정적인"
+    ],
+    "nouns": [
+      "봉황",
+      "용",
+      "호랑이",
+      "독수리",
+      "매",
+      "페가수스",
+      "사슴",
+      "늑대"
+    ]
   },
   "header": {
     "deviceLabel": "기기:",
@@ -238,7 +256,16 @@
     "edit": "편집",
     "untrust": "신뢰 해제",
     "confirmUntrust": "\"<strong>{{name}}</strong>\"의 신뢰를 해제하시겠습니까?<br><br><span style=\"color: var(--text-muted)\">신뢰 해제 후 이 기기의 파일은 수동 확인이 필요합니다.</span>",
-    "keepTrust": "신뢰 유지"
+    "keepTrust": "신뢰 유지",
+    "relayFallback": {
+      "title": "릴레이 폴백",
+      "description": "P2P 연결 실패 시 자동으로 릴레이 전송으로 전환",
+      "timeout": "폴백 타임아웃"
+    },
+    "prewarm": {
+      "title": "연결 프리웜",
+      "description": "기기 발견 시 사전 연결을 설정하여 첫 전송 속도 향상"
+    }
   },
   "navigation": {
     "devices": "기기",

@@ -25,8 +25,26 @@
     "github": "GitHub"
   },
   "deviceNames": {
-    "adjectives": ["俊敏", "輝く", "颯爽", "迅速", "優雅", "飛翔", "軽快", "堅実"],
-    "nouns": ["鳳凰", "麒麟", "玄武", "青龍", "朱雀", "天馬", "神鹿", "白虎"]
+    "adjectives": [
+      "俊敏",
+      "輝く",
+      "颯爽",
+      "迅速",
+      "優雅",
+      "飛翔",
+      "軽快",
+      "堅実"
+    ],
+    "nouns": [
+      "鳳凰",
+      "麒麟",
+      "玄武",
+      "青龍",
+      "朱雀",
+      "天馬",
+      "神鹿",
+      "白虎"
+    ]
   },
   "header": {
     "deviceLabel": "デバイス:",
@@ -237,7 +255,16 @@
     "edit": "編集",
     "untrust": "信頼を解除",
     "confirmUntrust": "「<strong>{{name}}</strong>」の信頼を解除してもよろしいですか?<br><br><span style=\"color: var(--text-muted)\">信頼を解除すると、このデバイスからのファイルは手動で確認する必要があります。</span>",
-    "keepTrust": "信頼を維持"
+    "keepTrust": "信頼を維持",
+    "relayFallback": {
+      "title": "リレーフォールバック",
+      "description": "P2P接続失敗時に自動的にリレー転送に切り替え",
+      "timeout": "フォールバックタイムアウト"
+    },
+    "prewarm": {
+      "title": "接続プリウォーム",
+      "description": "デバイス発見時に事前接続を確立し、初回転送を高速化"
+    }
   },
   "navigation": {
     "devices": "デバイス",

@@ -25,8 +25,26 @@
     "github": "GitHub"
   },
   "deviceNames": {
-    "adjectives": ["Swift", "Bright", "Cool", "Quick", "Elegant", "Flying", "Agile", "Steady"],
-    "nouns": ["Phoenix", "Dragon", "Tiger", "Eagle", "Falcon", "Pegasus", "Deer", "Wolf"]
+    "adjectives": [
+      "Swift",
+      "Bright",
+      "Cool",
+      "Quick",
+      "Elegant",
+      "Flying",
+      "Agile",
+      "Steady"
+    ],
+    "nouns": [
+      "Phoenix",
+      "Dragon",
+      "Tiger",
+      "Eagle",
+      "Falcon",
+      "Pegasus",
+      "Deer",
+      "Wolf"
+    ]
   },
   "header": {
     "deviceLabel": "Device:",
@@ -239,7 +257,16 @@
     "edit": "Edit",
     "untrust": "Untrust",
     "confirmUntrust": "Are you sure you want to untrust \"<strong>{{name}}</strong>\"?<br><br><span style=\"color: var(--text-muted)\">After untrusting, files from this device will require manual confirmation.</span>",
-    "keepTrust": "Keep Trust"
+    "keepTrust": "Keep Trust",
+    "relayFallback": {
+      "title": "Relay Fallback",
+      "description": "Auto switch to relay when P2P connection fails",
+      "timeout": "Fallback Timeout"
+    },
+    "prewarm": {
+      "title": "Connection Prewarm",
+      "description": "Pre-establish connections when devices are discovered"
+    }
   },
   "navigation": {
     "devices": "Devices",

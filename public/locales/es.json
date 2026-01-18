@@ -26,8 +26,26 @@
     "join": "Unirse a sala"
   },
   "deviceNames": {
-    "adjectives": ["Veloz", "Brillante", "Genial", "Rápido", "Elegante", "Volador", "Ágil", "Estable"],
-    "nouns": ["Fénix", "Dragón", "Tigre", "Águila", "Halcón", "Pegaso", "Ciervo", "Lobo"]
+    "adjectives": [
+      "Veloz",
+      "Brillante",
+      "Genial",
+      "Rápido",
+      "Elegante",
+      "Volador",
+      "Ágil",
+      "Estable"
+    ],
+    "nouns": [
+      "Fénix",
+      "Dragón",
+      "Tigre",
+      "Águila",
+      "Halcón",
+      "Pegaso",
+      "Ciervo",
+      "Lobo"
+    ]
   },
   "header": {
     "deviceLabel": "Dispositivo:",
@@ -240,7 +258,16 @@
     "edit": "Editar",
     "untrust": "Desconfiar",
     "confirmUntrust": "¿Está seguro de que desea desconfiar de \"<strong>{{name}}</strong>\"?<br><br><span style=\"color: var(--text-muted)\">Después de desconfiar, los archivos de este dispositivo requerirán confirmación manual.</span>",
-    "keepTrust": "Mantener confianza"
+    "keepTrust": "Mantener confianza",
+    "relayFallback": {
+      "title": "Respaldo por retransmisión",
+      "description": "Cambio automático a retransmisión cuando falla la conexión P2P",
+      "timeout": "Tiempo de respaldo"
+    },
+    "prewarm": {
+      "title": "Precalentamiento de conexión",
+      "description": "Establece conexiones previas al descubrir dispositivos"
+    }
   },
   "navigation": {
     "devices": "Dispositivos",

@@ -5,7 +5,7 @@
 import { WebRTCManager } from './webrtc.js';
 import { cryptoManager } from './crypto.js';
 import * as ui from './ui.js';
-import { STORAGE_KEYS, ROOM } from './config.js';
+import { STORAGE_KEYS, ROOM, DEFAULT_SETTINGS } from './config.js';
 import { i18n } from './i18n.js';
 
 class CloudDrop {
@@ -36,10 +36,76 @@ class CloudDrop {
     // Trusted devices - auto-accept files from these devices
     this.trustedDevices = this.loadTrustedDevices();
 
+    // App settings
+    this.settings = this.loadSettings();
+
     // Room password state
     this.roomPassword = null; // Room password (plaintext, only in memory)
     this.roomPasswordHash = null; // Password hash for server verification
     this.isSecureRoom = false; // Whether current room is password-protected
+  }
+
+  /**
+   * 加载应用设置
+   */
+  loadSettings() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+      return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : { ...DEFAULT_SETTINGS };
+    } catch (e) {
+      console.warn('Failed to load settings:', e);
+      return { ...DEFAULT_SETTINGS };
+    }
+  }
+
+  /**
+   * 保存应用设置
+   */
+  saveSettings() {
+    try {
+      localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(this.settings));
+    } catch (e) {
+      console.warn('Failed to save settings:', e);
+    }
+  }
+
+  /**
+   * 更新单个设置项
+   * @param {string} key - 设置键名
+   * @param {*} value - 设置值
+   */
+  updateSetting(key, value) {
+    this.settings[key] = value;
+    this.saveSettings();
+    this.applySettingToWebRTC(key, value);
+  }
+
+  /**
+   * 将设置应用到 WebRTC 模块
+   */
+  applySettingToWebRTC(key, value) {
+    if (!this.webrtc) return;
+    switch (key) {
+      case 'allowRelayFallback':
+        this.webrtc.setRelayFallbackEnabled(value);
+        break;
+      case 'relayFallbackTimeout':
+        this.webrtc.setRelayFallbackTimeout(value);
+        break;
+      case 'enablePrewarm':
+        this.webrtc.setPrewarmEnabled(value);
+        break;
+    }
+  }
+
+  /**
+   * 应用所有设置到 WebRTC（初始化时调用）
+   */
+  applyAllSettingsToWebRTC() {
+    if (!this.webrtc) return;
+    this.applySettingToWebRTC('allowRelayFallback', this.settings.allowRelayFallback);
+    this.applySettingToWebRTC('relayFallbackTimeout', this.settings.relayFallbackTimeout);
+    this.applySettingToWebRTC('enablePrewarm', this.settings.enablePrewarm);
   }
 
   /**
@@ -647,6 +713,9 @@ class CloudDrop {
     this.webrtc = new WebRTCManager({
       send: (msg) => this.ws.readyState === WebSocket.OPEN && this.ws.send(JSON.stringify(msg))
     });
+
+    // 应用用户设置到 WebRTC
+    this.applyAllSettingsToWebRTC();
 
     this.webrtc.onProgress = (p) => {
       const isRelayMode = this.webrtc.relayMode.get(p.peerId) || false;
@@ -2203,6 +2272,12 @@ class CloudDrop {
       ui.showToast(i18n.t('share.roomCodeCopied'), 'success');
     });
 
+    // 设置 Popover (桌面端)
+    this.setupSettingsPopover();
+
+    // 设置控件事件监听 (移动端和桌面端)
+    this.setupSettingsControls();
+
     // Mobile share panel
     document.getElementById('mobileShareClose')?.addEventListener('click', () => {
       ui.hideModal('mobileShareModal');
@@ -2633,6 +2708,192 @@ class CloudDrop {
       viewport.addEventListener('resize', handleViewportChange);
       viewport.addEventListener('scroll', handleViewportChange);
     }
+  }
+
+  /**
+   * 设置 Popover (桌面端) 
+   */
+  setupSettingsPopover() {
+    const settingsBtn = document.getElementById('settingsBtn');
+    const settingsPopover = document.getElementById('settingsPopover');
+    const settingsPopoverClose = document.getElementById('settingsPopoverClose');
+
+    if (!settingsBtn || !settingsPopover) return;
+
+    // 打开设置 Popover
+    settingsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // 先同步设置值到桌面端 Popover 控件
+      this.syncSettingsToUI('popover');
+      this.syncTrustedDevicesToUI('popover');
+      settingsPopover.classList.toggle('active');
+    });
+
+    // 关闭按钮
+    settingsPopoverClose?.addEventListener('click', () => {
+      settingsPopover.classList.remove('active');
+    });
+
+    // 点击外部关闭
+    document.addEventListener('click', (e) => {
+      if (!settingsPopover.contains(e.target) && !settingsBtn.contains(e.target)) {
+        settingsPopover.classList.remove('active');
+      }
+    });
+  }
+
+  /**
+   * 设置控件事件监听 (移动端和桌面端)
+   */
+  setupSettingsControls() {
+    // 移动端设置模态框打开时同步设置值
+    document.getElementById('navSettings')?.addEventListener('click', () => {
+      this.syncSettingsToUI('modal');
+      this.syncTrustedDevicesToUI('modal');
+    });
+
+    // 中继降级开关 - 移动端
+    const relayFallbackToggle = document.getElementById('settingsRelayFallback');
+    const relayTimeoutRow = document.getElementById('relayTimeoutRow');
+    relayFallbackToggle?.addEventListener('change', (e) => {
+      this.updateSetting('allowRelayFallback', e.target.checked);
+      if (relayTimeoutRow) {
+        relayTimeoutRow.style.display = e.target.checked ? 'flex' : 'none';
+      }
+      // 同步到桌面端
+      const popoverToggle = document.getElementById('popoverRelayFallback');
+      if (popoverToggle) popoverToggle.checked = e.target.checked;
+    });
+
+    // 中继降级开关 - 桌面端
+    const popoverRelayFallbackToggle = document.getElementById('popoverRelayFallback');
+    const popoverRelayTimeoutRow = document.getElementById('popoverRelayTimeoutRow');
+    popoverRelayFallbackToggle?.addEventListener('change', (e) => {
+      this.updateSetting('allowRelayFallback', e.target.checked);
+      if (popoverRelayTimeoutRow) {
+        popoverRelayTimeoutRow.style.display = e.target.checked ? 'flex' : 'none';
+      }
+      // 同步到移动端
+      if (relayFallbackToggle) relayFallbackToggle.checked = e.target.checked;
+    });
+
+    // 降级超时滑块 - 移动端
+    const relayTimeoutSlider = document.getElementById('settingsRelayTimeout');
+    const relayTimeoutValue = document.getElementById('relayTimeoutValue');
+    relayTimeoutSlider?.addEventListener('input', (e) => {
+      const value = parseInt(e.target.value);
+      if (relayTimeoutValue) relayTimeoutValue.textContent = `${value}s`;
+      // 同步到桌面端
+      const popoverSlider = document.getElementById('popoverRelayTimeout');
+      const popoverValue = document.getElementById('popoverRelayTimeoutValue');
+      if (popoverSlider) popoverSlider.value = value;
+      if (popoverValue) popoverValue.textContent = `${value}s`;
+    });
+    relayTimeoutSlider?.addEventListener('change', (e) => {
+      this.updateSetting('relayFallbackTimeout', parseInt(e.target.value));
+    });
+
+    // 降级超时滑块 - 桌面端
+    const popoverRelayTimeoutSlider = document.getElementById('popoverRelayTimeout');
+    const popoverRelayTimeoutValue = document.getElementById('popoverRelayTimeoutValue');
+    popoverRelayTimeoutSlider?.addEventListener('input', (e) => {
+      const value = parseInt(e.target.value);
+      if (popoverRelayTimeoutValue) popoverRelayTimeoutValue.textContent = `${value}s`;
+      // 同步到移动端
+      if (relayTimeoutSlider) relayTimeoutSlider.value = value;
+      if (relayTimeoutValue) relayTimeoutValue.textContent = `${value}s`;
+    });
+    popoverRelayTimeoutSlider?.addEventListener('change', (e) => {
+      this.updateSetting('relayFallbackTimeout', parseInt(e.target.value));
+    });
+
+    // 连接预热开关 - 移动端
+    const prewarmToggle = document.getElementById('settingsPrewarm');
+    prewarmToggle?.addEventListener('change', (e) => {
+      this.updateSetting('enablePrewarm', e.target.checked);
+      // 同步到桌面端
+      const popoverToggle = document.getElementById('popoverPrewarm');
+      if (popoverToggle) popoverToggle.checked = e.target.checked;
+    });
+
+    // 连接预热开关 - 桌面端
+    const popoverPrewarmToggle = document.getElementById('popoverPrewarm');
+    popoverPrewarmToggle?.addEventListener('change', (e) => {
+      this.updateSetting('enablePrewarm', e.target.checked);
+      // 同步到移动端
+      if (prewarmToggle) prewarmToggle.checked = e.target.checked;
+    });
+  }
+
+  /**
+   * 同步设置值到 UI 控件
+   * @param {'popover'|'modal'} target - 目标 UI
+   */
+  syncSettingsToUI(target) {
+    const prefix = target === 'popover' ? 'popover' : 'settings';
+
+    // 中继降级开关
+    const relayToggle = document.getElementById(target === 'popover' ? 'popoverRelayFallback' : 'settingsRelayFallback');
+    if (relayToggle) relayToggle.checked = this.settings.allowRelayFallback;
+
+    // 超时滑块行的显示/隐藏
+    const timeoutRow = document.getElementById(target === 'popover' ? 'popoverRelayTimeoutRow' : 'relayTimeoutRow');
+    if (timeoutRow) timeoutRow.style.display = this.settings.allowRelayFallback ? 'flex' : 'none';
+
+    // 超时滑块值
+    const timeoutSlider = document.getElementById(target === 'popover' ? 'popoverRelayTimeout' : 'settingsRelayTimeout');
+    const timeoutValue = document.getElementById(target === 'popover' ? 'popoverRelayTimeoutValue' : 'relayTimeoutValue');
+    if (timeoutSlider) timeoutSlider.value = this.settings.relayFallbackTimeout;
+    if (timeoutValue) timeoutValue.textContent = `${this.settings.relayFallbackTimeout}s`;
+
+    // 预热开关
+    const prewarmToggle = document.getElementById(target === 'popover' ? 'popoverPrewarm' : 'settingsPrewarm');
+    if (prewarmToggle) prewarmToggle.checked = this.settings.enablePrewarm;
+  }
+
+  /**
+   * 同步信任设备列表到 UI
+   * @param {'popover'|'modal'} target - 目标 UI
+   */
+  syncTrustedDevicesToUI(target) {
+    const containerId = target === 'popover' ? 'popoverTrustedDevicesList' : 'trustedDevicesList';
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const devices = this.getTrustedDevicesList();
+
+    if (devices.length === 0) {
+      container.innerHTML = `<p class="${target === 'popover' ? 'settings-popover-empty' : 'trusted-empty'}" data-i18n="settings.noTrustedDevices">${i18n.t('settings.noTrustedDevices')}</p>`;
+      return;
+    }
+
+    container.innerHTML = devices.map(device => `
+      <div class="trusted-device-item" data-fingerprint="${device.fingerprint}">
+        <div class="trusted-device-info">
+          <span class="trusted-device-name">${ui.escapeHtml(device.name)}</span>
+          <span class="trusted-device-type">${device.browserInfo || i18n.t('settings.unknownBrowser')}</span>
+        </div>
+        <button class="btn-untrust" data-fingerprint="${device.fingerprint}" title="${i18n.t('settings.untrust')}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+    `).join('');
+
+    // 添加取消信任按钮事件
+    container.querySelectorAll('.btn-untrust').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const fingerprint = btn.dataset.fingerprint;
+        const info = this.removeTrustedDevice(fingerprint);
+        if (info) {
+          ui.showToast(i18n.t('toast.untrusted', { name: info.name }), 'info');
+        }
+        // 刷新两个列表
+        this.syncTrustedDevicesToUI('popover');
+        this.syncTrustedDevicesToUI('modal');
+      });
+    });
   }
 }
 

@@ -26,8 +26,26 @@
     "join": "Rejoindre la salle"
   },
   "deviceNames": {
-    "adjectives": ["Rapide", "Brillant", "Cool", "Agile", "Élégant", "Volant", "Vif", "Stable"],
-    "nouns": ["Phénix", "Dragon", "Tigre", "Aigle", "Faucon", "Pégase", "Cerf", "Loup"]
+    "adjectives": [
+      "Rapide",
+      "Brillant",
+      "Cool",
+      "Agile",
+      "Élégant",
+      "Volant",
+      "Vif",
+      "Stable"
+    ],
+    "nouns": [
+      "Phénix",
+      "Dragon",
+      "Tigre",
+      "Aigle",
+      "Faucon",
+      "Pégase",
+      "Cerf",
+      "Loup"
+    ]
   },
   "header": {
     "deviceLabel": "Appareil :",
@@ -240,7 +258,16 @@
     "edit": "Modifier",
     "untrust": "Retirer l'approbation",
     "confirmUntrust": "Êtes-vous sûr de vouloir retirer l'approbation de \"<strong>{{name}}</strong>\" ?<br><br><span style=\"color: var(--text-muted)\">Après retrait, les fichiers de cet appareil nécessiteront une confirmation manuelle.</span>",
-    "keepTrust": "Garder l'approbation"
+    "keepTrust": "Garder l'approbation",
+    "relayFallback": {
+      "title": "Basculement relais",
+      "description": "Basculement automatique vers le relais en cas d'échec P2P",
+      "timeout": "Délai de basculement"
+    },
+    "prewarm": {
+      "title": "Préchauffage connexion",
+      "description": "Établit des connexions préalables lors de la découverte"
+    }
   },
   "navigation": {
     "devices": "Appareils",

@@ -18,6 +18,16 @@ export const APP = {
 export const STORAGE_KEYS = {
   DEVICE_NAME: 'clouddrop_device_name',
   TRUSTED_DEVICES: 'clouddrop_trusted_devices',
+  SETTINGS: 'clouddrop_settings',
+};
+
+// =============================================================================
+// Default Settings Configuration
+// =============================================================================
+export const DEFAULT_SETTINGS = {
+  allowRelayFallback: true,      // 是否允许中继降级
+  relayFallbackTimeout: 5,       // 中继降级超时（秒）
+  enablePrewarm: true,           // 是否启用连接预热
 };
 
 // =============================================================================

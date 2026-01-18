@@ -26,8 +26,26 @@
     "join": "Raum beitreten"
   },
   "deviceNames": {
-    "adjectives": ["Schnell", "Hell", "Cool", "Flink", "Elegant", "Fliegend", "Agil", "Stabil"],
-    "nouns": ["Phönix", "Drache", "Tiger", "Adler", "Falke", "Pegasus", "Hirsch", "Wolf"]
+    "adjectives": [
+      "Schnell",
+      "Hell",
+      "Cool",
+      "Flink",
+      "Elegant",
+      "Fliegend",
+      "Agil",
+      "Stabil"
+    ],
+    "nouns": [
+      "Phönix",
+      "Drache",
+      "Tiger",
+      "Adler",
+      "Falke",
+      "Pegasus",
+      "Hirsch",
+      "Wolf"
+    ]
   },
   "header": {
     "deviceLabel": "Gerät:",
@@ -240,7 +258,16 @@
     "edit": "Bearbeiten",
     "untrust": "Vertrauen entfernen",
     "confirmUntrust": "Sind Sie sicher, dass Sie das Vertrauen von \"<strong>{{name}}</strong>\" entfernen möchten?<br><br><span style=\"color: var(--text-muted)\">Nach dem Entfernen des Vertrauens erfordern Dateien von diesem Gerät eine manuelle Bestätigung.</span>",
-    "keepTrust": "Vertrauen behalten"
+    "keepTrust": "Vertrauen behalten",
+    "relayFallback": {
+      "title": "Relay-Fallback",
+      "description": "Automatischer Wechsel zu Relay bei P2P-Verbindungsfehler",
+      "timeout": "Fallback-Timeout"
+    },
+    "prewarm": {
+      "title": "Verbindungsvorwärmung",
+      "description": "Stellt Verbindungen bei Geräteerkennung vorab her"
+    }
   },
   "navigation": {
     "devices": "Geräte",

@@ -26,8 +26,26 @@
     "join": "加入房間"
   },
   "deviceNames": {
-    "adjectives": ["敏捷", "明亮", "酷炫", "迅速", "優雅", "飛速", "靈動", "沉穩"],
-    "nouns": ["鳳凰", "麒麟", "玄武", "青龍", "朱雀", "天馬", "神鹿", "白虎"]
+    "adjectives": [
+      "敏捷",
+      "明亮",
+      "酷炫",
+      "迅速",
+      "優雅",
+      "飛速",
+      "靈動",
+      "沉穩"
+    ],
+    "nouns": [
+      "鳳凰",
+      "麒麟",
+      "玄武",
+      "青龍",
+      "朱雀",
+      "天馬",
+      "神鹿",
+      "白虎"
+    ]
   },
   "header": {
     "deviceLabel": "設備名:",
@@ -238,7 +256,16 @@
     "edit": "修改",
     "untrust": "取消信任",
     "confirmUntrust": "確定要取消信任「<strong>{{name}}</strong>」嗎？<br><br><span style=\"color: var(--text-muted)\">取消後，該設備發送文件時需要你手動確認。</span>",
-    "keepTrust": "保留信任"
+    "keepTrust": "保留信任",
+    "relayFallback": {
+      "title": "中繼降級",
+      "description": "P2P 連接失敗時自動切換到中繼傳輸",
+      "timeout": "降級超時"
+    },
+    "prewarm": {
+      "title": "連接預熱",
+      "description": "設備發現時預先建立連接，加快首次傳輸速度"
+    }
   },
   "navigation": {
     "devices": "設備",
