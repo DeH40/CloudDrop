@@ -323,5 +323,154 @@
     "fileReceivedBody": "{{sender}} sent you a file: {{file}}",
     "messageReceived": "New message",
     "messageReceivedBody": "{{sender}} sent you a message"
+  },
+  "footer": {
+    "about": "About",
+    "security": "Security",
+    "faq": "FAQ",
+    "tos": "TOS",
+    "techReport": "Technical Report",
+    "copyright": "© 2026 CloudDrop. Open Source P2P File Transfer."
+  },
+  "about": {
+    "title": "About CloudDrop",
+    "mission": {
+      "title": "Our Mission",
+      "desc": "We believe that file sharing should be <strong>simple, secure, and private</strong>. In an age where digital privacy is constantly under threat, CloudDrop provides a sanctuary for your data. We don't store your files; we simply provide the secure tunnel for them to travel."
+    },
+    "why": {
+      "title": "Why CloudDrop?",
+      "noStorage": "No Server Storage:",
+      "noStorageDesc": "Your files go directly from device A to device B.",
+      "e2ee": "End-to-End Encryption:",
+      "e2eeDesc": "Not even we can see what you are sending.",
+      "noLimits": "No Limits:",
+      "noLimitsDesc": "Send files of any size, as long as your browser can handle it.",
+      "openSource": "Open Source:",
+      "openSourceDesc": "Trust through transparency. Our code is open for anyone to audit."
+    },
+    "openSource": {
+      "title": "Open Source",
+      "desc": "CloudDrop is proudly open source. You can view our source code, contribute, or report issues on"
+    }
+  },
+  "securityPage": {
+    "pageTitle": "Security & Privacy",
+    "zeroKnowledge": {
+      "title": "Zero-Knowledge Architecture",
+      "desc": "We cannot read your files. We don't want to. CloudDrop is designed so that the server only facilitates the connection setup (Signaling), but the data transfer happens directly between devices (Peer-to-Peer)."
+    },
+    "e2ee": {
+      "title": "End-to-End Encryption",
+      "desc": "Every file is encrypted in the browser before it is sent and decrypted only after it is received. We use standard, audit-proven cryptographic algorithms:",
+      "algo": "<strong>Algorithm:</strong> AES-256-GCM (Galois/Counter Mode)",
+      "keyExchange": "<strong>Key Exchange:</strong> ECDH via WebRTC DTLS",
+      "integrity": "<strong>Integrity:</strong> Authenticated encryption ensures data hasn't been tampered with."
+    },
+    "p2p": {
+      "title": "Peer-to-Peer (WebRTC)",
+      "desc": "CloudDrop utilizes <strong>WebRTC</strong> to create a direct data channel between peers. This means in most cases, your file data never touches a server, even in encrypted form. It flows directly from your device to the recipient's device through the shortest network path."
+    }
+  },
+  "faq": {
+    "pageTitle": "Frequently Asked Questions",
+    "q1": {
+      "question": "Is there a file size limit?",
+      "answer": "No. Since CloudDrop transfers files directly between devices (P2P), there is no arbitrary file size limit imposed by us. The only limit is your browser's capability and your device's available storage."
+    },
+    "q2": {
+      "question": "Are my files stored on a server?",
+      "answer": "No. CloudDrop uses WebRTC for peer-to-peer transfer. Files are streamed directly from the sender to the receiver. We never store your files."
+    },
+    "q3": {
+      "question": "Is it secure?",
+      "answer": "Yes. All transfers are encrypted using DTLS (Datagram Transport Layer Security) via WebRTC. Additionally, we use end-to-end encryption for file content to ensure privacy."
+    },
+    "q4": {
+      "question": "Why can't I connect to another device?",
+      "answer": "Ensure both devices are on the same network or have internet access. If you are on a restrictive network (like a corporate firewall), connection might fail. Try refreshing the room code."
+    },
+    "stillHaveQuestions": "Still have questions?",
+    "checkGithub": "Check our GitHub Issues"
+  },
+  "tos": {
+    "pageTitle": "Terms of Service",
+    "lastUpdated": "Last Updated: February 5, 2026",
+    "intro": {
+      "title": "1. Introduction",
+      "desc1": "Welcome to CloudDrop. By using our website and services, you agree to these Terms of Service. Please read them carefully.",
+      "desc2": "CloudDrop is a decentralized, peer-to-peer (P2P) file sharing tool. We provide the platform for direct device-to-device communication without server-side storage."
+    },
+    "service": {
+      "title": "2. Service Nature",
+      "p1": "<strong>No Storage:</strong> CloudDrop does not store your files. All data is transferred directly between users' browsers.",
+      "p2": "<strong>Encryption:</strong> While we use End-to-End Encryption (E2EE), you understand that no transmission over the internet can be guaranteed as 100% secure."
+    },
+    "responsibility": {
+      "title": "3. User Responsibility",
+      "p1": "You are solely responsible for the content you share through CloudDrop.",
+      "p2": "You agree not to use the service to transfer any content that is illegal, infringing, or harmful."
+    },
+    "prohibited": {
+      "title": "4. Prohibited Activities",
+      "desc": "You may not:",
+      "item1": "Violate any local, state, or international laws.",
+      "item2": "Distribute malware, viruses, or any other harmful code.",
+      "item3": "Infringe upon the intellectual property rights of others."
+    },
+    "disclaimer": {
+      "title": "5. Disclaimer of Warranties",
+      "desc": "CloudDrop is provided \"AS IS\" and \"AS AVAILABLE\" without any warranties of any kind. We do not warrant that the service will be uninterrupted or error-free."
+    },
+    "liability": {
+      "title": "6. Limitation of Liability",
+      "desc": "To the maximum extent permitted by law, CloudDrop and its contributors shall not be liable for any indirect, incidental, special, or consequential damages resulting from the use of the service."
+    }
+  },
+  "techReport": {
+    "pageTitle": "Technical Architecture Report",
+    "intro": {
+      "title": "How CloudDrop Works",
+      "desc": "CloudDrop is designed with a single goal: to transfer your files securely without anyone else seeing them. This report explains how we achieve this using modern web technologies."
+    },
+    "architecture": {
+      "title": "System Architecture",
+      "desc": "Unlike traditional file sharing services, CloudDrop doesn't have a central cloud storage. Instead, it creates a direct pipe between your devices.",
+      "deviceA": "Device A",
+      "deviceB": "Device B"
+    },
+    "flow": {
+      "title": "Data Flow Journey",
+      "step1": {
+        "title": "1. Discovery",
+        "desc": "Devices find each other using a 'Room Code' via our signaling server. Note: The server only matches the codes; it never sees your files."
+      },
+      "step2": {
+        "title": "2. Connection",
+        "desc": "A direct Peer-to-Peer (P2P) connection is established using WebRTC. This is like a private tunnel between the two devices."
+      },
+      "step3": {
+        "title": "3. Encryption",
+        "desc": "Before leaving your device, the file is encrypted. It travels through the tunnel and is only decrypted when it arrives at the other end."
+      }
+    },
+    "security": {
+      "title": "Why It's Secure",
+      "tunnel": "Encrypted P2P Tunnel",
+      "points": [
+        {
+          "title": "Zero Knowledge",
+          "desc": "We don't know what you are sending. The keys stay in your browser."
+        },
+        {
+          "title": "Ephemeral",
+          "desc": "No account, no history. Once you close the tab, the connection data is erased."
+        },
+        {
+          "title": "Client-Side",
+          "desc": "All processing happens locally. Your privacy is enforced by math, not promises."
+        }
+      ]
+    }
   }
 }

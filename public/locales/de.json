@@ -324,5 +324,154 @@
     "fileReceivedBody": "{{sender}} hat Ihnen eine Datei gesendet: {{file}}",
     "messageReceived": "Neue Nachricht",
     "messageReceivedBody": "{{sender}} hat Ihnen eine Nachricht gesendet"
+  },
+  "about": {
+    "title": "Über CloudDrop",
+    "mission": {
+      "title": "Unsere Mission",
+      "desc": "Wir glauben, dass File-Sharing <strong>einfach, sicher und privat</strong> sein sollte. In einer Zeit, in der die digitale Privatsphäre ständig bedroht ist, bietet CloudDrop einen Zufluchtsort für Ihre Daten. Wir speichern Ihre Dateien nicht; wir stellen lediglich den sicheren Tunnel bereit, durch den sie reisen."
+    },
+    "why": {
+      "title": "Warum CloudDrop?",
+      "noStorage": "Kein Serverspeicher:",
+      "noStorageDesc": "Ihre Dateien gehen direkt von Gerät A zu Gerät B.",
+      "e2ee": "End-to-End-Verschlüsselung:",
+      "e2eeDesc": "Nicht einmal wir können sehen, was Sie senden.",
+      "noLimits": "Keine Grenzen:",
+      "noLimitsDesc": "Senden Sie Dateien jeder Größe, solange Ihr Browser dies verarbeiten kann.",
+      "openSource": "Open Source:",
+      "openSourceDesc": "Vertrauen durch Transparenz. Unser Code ist offen für jeden zur Überprüfung."
+    },
+    "openSource": {
+      "title": "Open Source",
+      "desc": "CloudDrop ist stolz darauf, Open Source zu sein. Sie können unseren Quellcode auf GitHub einsehen, beitragen oder Probleme melden."
+    }
+  },
+  "securityPage": {
+    "pageTitle": "Sicherheit & Datenschutz",
+    "zeroKnowledge": {
+      "title": "Zero-Knowledge-Architektur",
+      "desc": "Wir können Ihre Dateien nicht lesen. Wir wollen es nicht. CloudDrop ist so konzipiert, dass der Server nur den Verbindungsaufbau (Signaling) erleichtert, der Datentransfer jedoch direkt zwischen den Geräten (Peer-to-Peer) stattfindet."
+    },
+    "e2ee": {
+      "title": "End-to-End-Verschlüsselung",
+      "desc": "Jede Datei wird im Browser verschlüsselt, bevor sie gesendet wird, und erst entschlüsselt, nachdem sie empfangen wurde. Wir verwenden branchenübliche, geprüfte kryptografische Algorithmen:",
+      "algo": "<strong>Algorithmus:</strong> AES-256-GCM (Galois/Counter Mode)",
+      "keyExchange": "<strong>Schlüsselaustausch:</strong> ECDH über WebRTC DTLS",
+      "integrity": "<strong>Integrität:</strong> Authentifizierte Verschlüsselung stellt sicher, dass Daten nicht manipuliert wurden."
+    },
+    "p2p": {
+      "title": "Peer-to-Peer (WebRTC)",
+      "desc": "CloudDrop nutzt <strong>WebRTC</strong>, um einen direkten Datenkanal zwischen Peers zu erstellen. Das bedeutet, dass Ihre Dateidaten in den meisten Fällen niemals einen Server berühren, selbst in verschlüsselter Form. Sie fließen direkt von Ihrem Gerät zum Gerät des Empfängers über den kürzesten Netzwerkpfad."
+    }
+  },
+  "faq": {
+    "pageTitle": "Häufig gestellte Fragen (FAQ)",
+    "q1": {
+      "question": "Gibt es ein Dateigrößenlimit?",
+      "answer": "Nein. Da CloudDrop Dateien direkt zwischen Geräten überträgt (P2P), gibt es kein willkürliches Dateigrößenlimit von uns. Das einzige Limit ist die Fähigkeit Ihres Browsers und der verfügbare Speicherplatz Ihres Geräts."
+    },
+    "q2": {
+      "question": "Werden meine Dateien auf einem Server gespeichert?",
+      "answer": "Nein. CloudDrop verwendet WebRTC für Peer-to-Peer-Übertragungen. Dateien werden direkt vom Sender zum Empfänger gestreamt. Wir speichern Ihre Dateien niemals."
+    },
+    "q3": {
+      "question": "Ist es sicher?",
+      "answer": "Ja. Alle Übertragungen werden mit DTLS (Datagram Transport Layer Security) über WebRTC verschlüsselt. Zusätzlich verwenden wir End-to-End-Verschlüsselung für Dateiinhalte, um den Datenschutz zu gewährleisten."
+    },
+    "q4": {
+      "question": "Warum kann ich mich nicht mit einem anderen Gerät verbinden?",
+      "answer": "Stellen Sie sicher, dass sich beide Geräte im selben Netzwerk befinden oder Zugang zum Internet haben. Wenn Sie sich in einem restriktiven Netzwerk (wie einer Firmen-Firewall) befinden, kann die Verbindung fehlschlagen. Versuchen Sie, den Raumcode zu aktualisieren."
+    },
+    "stillHaveQuestions": "Haben Sie noch Fragen?",
+    "checkGithub": "Überprüfen Sie unsere GitHub Issues"
+  },
+  "tos": {
+    "pageTitle": "Nutzungsbedingungen",
+    "lastUpdated": "Zuletzt aktualisiert: 5. Februar 2026",
+    "intro": {
+      "title": "1. Einführung",
+      "desc1": "Willkommen bei CloudDrop. Durch die Nutzung unserer Website und Dienste stimmen Sie diesen Nutzungsbedingungen zu. Bitte lesen Sie sie sorgfältig durch.",
+      "desc2": "CloudDrop ist ein dezentrales Peer-to-Peer (P2P) File-Sharing-Tool. Wir bieten die Plattform für direkte Kommunikation zwischen Geräten ohne serverseitigen Speicher."
+    },
+    "service": {
+      "title": "2. Art des Dienstes",
+      "p1": "<strong>Kein Speicher:</strong> CloudDrop speichert Ihre Dateien nicht. Alle Daten werden direkt zwischen den Browsern der Benutzer übertragen.",
+      "p2": "<strong>Verschlüsselung:</strong> Obwohl wir End-to-End-Verschlüsselung (E2EE) verwenden, verstehen Sie, dass keine Übertragung über das Internet zu 100% sicher garantiert werden kann."
+    },
+    "responsibility": {
+      "title": "3. Benutzerverantwortung",
+      "p1": "Sie sind allein verantwortlich für die Inhalte, die Sie über CloudDrop teilen.",
+      "p2": "Sie stimmen zu, den Dienst nicht zu nutzen, um illegale, verletzende oder schädliche Inhalte zu übertragen."
+    },
+    "prohibited": {
+      "title": "4. Verbotene Aktivitäten",
+      "desc": "Sie dürfen nicht:",
+      "item1": "Gegen lokale, staatliche oder internationale Gesetze verstoßen.",
+      "item2": "Malware, Viren oder anderen schädlichen Code verbreiten.",
+      "item3": "Die geistigen Eigentumsrechte anderer verletzen."
+    },
+    "disclaimer": {
+      "title": "5. Gewährleistungsausschluss",
+      "desc": "CloudDrop wird \"WIE BESEHEN\" und \"WIE VERFÜGBAR\" ohne jegliche Garantien bereitgestellt. Wir garantieren nicht, dass der Dienst unterbrechungsfrei oder fehlerfrei sein wird."
+    },
+    "liability": {
+      "title": "6. Haftungsbeschränkung",
+      "desc": "Soweit gesetzlich zulässig, haften CloudDrop und seine Mitwirkenden nicht für indirekte, zufällige, spezielle oder Folgeschäden, die aus der Nutzung des Dienstes resultieren."
+    }
+  },
+  "footer": {
+    "about": "Über CloudDrop",
+    "security": "Sicherheit & Datenschutz",
+    "faq": "FAQ",
+    "tos": "Nutzungsbedingungen",
+    "techReport": "Technischer Bericht",
+    "copyright": "© 2026 CloudDrop. Open Source P2P-Dateiübertragung"
+  },
+  "techReport": {
+    "pageTitle": "Technischer Architekturbericht",
+    "intro": {
+      "title": "Wie CloudDrop funktioniert",
+      "desc": "CloudDrop wurde mit einem einzigen Ziel entwickelt: Ihre Dateien sicher zu übertragen, ohne dass Dritte sie sehen können. Dieser Bericht erklärt, wie wir dies mit modernen Webtechnologien erreichen."
+    },
+    "architecture": {
+      "title": "Systemarchitektur",
+      "desc": "Im Gegensatz zu herkömmlichen Datenaustauschdiensten verfügt CloudDrop über keinen zentralen Cloud-Speicher. Stattdessen wird eine direkte Leitung zwischen Ihren Geräten erstellt.",
+      "deviceA": "Gerät A",
+      "deviceB": "Gerät B"
+    },
+    "flow": {
+      "title": "Datenfluss-Reise",
+      "step1": {
+        "title": "1. Entdeckung",
+        "desc": "Geräte finden sich gegenseitig über einen 'Raumcode' via unseren Signalisierungsserver. Hinweis: Der Server vergleicht nur die Codes; er sieht niemals Ihre Dateien."
+      },
+      "step2": {
+        "title": "2. Verbindung",
+        "desc": "Eine direkte Peer-to-Peer (P2P)-Verbindung wird mithilfe von WebRTC hergestellt. Dies ist wie ein privater Tunnel zwischen den beiden Geräten."
+      },
+      "step3": {
+        "title": "3. Verschlüsselung",
+        "desc": "Bevor die Datei Ihr Gerät verlässt, wird sie verschlüsselt. Sie reist durch den Tunnel und wird erst entschlüsselt, wenn sie am anderen Ende ankommt."
+      }
+    },
+    "security": {
+      "title": "Warum es sicher ist",
+      "tunnel": "Verschlüsselter P2P-Tunnel",
+      "points": [
+        {
+          "title": "Zero Knowledge",
+          "desc": "Wir wissen nicht, was Sie senden. Die Schlüssel bleiben in Ihrem Browser."
+        },
+        {
+          "title": "Ephemer",
+          "desc": "Kein Konto, kein Verlauf. Sobald Sie den Tab schließen, werden die Verbindungsdaten gelöscht."
+        },
+        {
+          "title": "Clientseitig",
+          "desc": "Die gesamte Verarbeitung erfolgt lokal. Ihre Privatsphäre wird durch Mathematik erzwungen, nicht durch Versprechen."
+        }
+      ]
+    }
   }
 }

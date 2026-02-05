@@ -5525,3 +5525,60 @@ html {
     gap: var(--space-sm);
   }
 }
+
+/* ============================================
+   Site Footer (New for SEO)
+   ============================================ */
+.site-footer {
+  width: 100%;
+  padding: var(--space-lg) var(--space-xl);
+  margin-top: auto;
+  border-top: 1px solid var(--glass-border);
+  background: var(--bg-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  text-align: center;
+}
+
+.footer-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  align-items: center;
+}
+
+.footer-links {
+  display: flex;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.footer-links a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: var(--font-size-sm);
+  transition: color var(--transition-fast);
+}
+
+.footer-links a:hover {
+  color: var(--accent-primary);
+}
+
+.footer-copyright {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+/* Ensure h1 logo behaves correctly */
+h1.logo-text {
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  background: var(--accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0;
+  line-height: 1.2;
+}

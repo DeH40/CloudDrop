@@ -322,5 +322,154 @@
     "fileReceivedBody": "{{sender}} 发送了文件：{{file}}",
     "messageReceived": "收到新消息",
     "messageReceivedBody": "{{sender}} 发送了一条消息"
+  },
+  "footer": {
+    "about": "关于我们",
+    "security": "安全隐私",
+    "faq": "常见问题",
+    "tos": "服务条款",
+    "techReport": "技术报告",
+    "copyright": "© 2026 CloudDrop. 开源点对点文件传输。"
+  },
+  "about": {
+    "title": "关于 CloudDrop",
+    "mission": {
+      "title": "我们的使命",
+      "desc": "我们坚信文件分享应当是<strong>简单、安全且隐私</strong>的。在数字隐私面临挑战的时代，CloudDrop 为您的数据提供了一个避风港。我们不存储您的文件，只是为它们提供一条安全的传输隧道。"
+    },
+    "why": {
+      "title": "为什么选择 CloudDrop？",
+      "noStorage": "无服务器存储:",
+      "noStorageDesc": "您的文件直接从设备 A 传输到设备 B。",
+      "e2ee": "端到端加密:",
+      "e2eeDesc": "即使是我们也无法查看您发送的内容。",
+      "noLimits": "无限制:",
+      "noLimitsDesc": "发送任意大小的文件，只要您的浏览器和带宽允许。",
+      "openSource": "开源透明:",
+      "openSourceDesc": "透明即信任。我们的代码完全开源，任何人都可以审计。"
+    },
+    "openSource": {
+      "title": "开源",
+      "desc": "CloudDrop 自豪地开源。您可以在 GitHub 上查看源码、贡献代码或反馈问题"
+    }
+  },
+  "securityPage": {
+    "pageTitle": "安全与隐私",
+    "zeroKnowledge": {
+      "title": "零知识架构",
+      "desc": "我们无法读取您的文件，我们也不想读取。CloudDrop 的设计使得服务器仅用于建立连接（信令），具体的数据传输直接发生在设备之间（P2P）。"
+    },
+    "e2ee": {
+      "title": "端到端加密",
+      "desc": "每个文件在发送前都会在浏览器中加密，只有在接收后才会解密。我们使用业界标准、经过审计的加密算法：",
+      "algo": "<strong>算法:</strong> AES-256-GCM (Galois/Counter Mode)",
+      "keyExchange": "<strong>密钥交换:</strong> 通过 WebRTC DTLS 进行 ECDH 密钥交换",
+      "integrity": "<strong>完整性:</strong> 认证加密确保数据未被篡改"
+    },
+    "p2p": {
+      "title": "点对点传输 (WebRTC)",
+      "desc": "CloudDrop 利用 <strong>WebRTC</strong> 在节点之间创建直接的数据通道。这意味着在大多数情况下，您的文件数据（即使是加密后的）也从未经过服务器。它们通过最短的网络路径直接从您的设备流向接收者的设备。"
+    }
+  },
+  "faq": {
+    "pageTitle": "常见问题",
+    "q1": {
+      "question": "有文件大小限制吗？",
+      "answer": "没有。由于 CloudDrop 是直接在设备间传输文件（P2P），我们没有设置任意的大小限制。唯一的限制是您的浏览器处理能力和设备的可用存储空间。"
+    },
+    "q2": {
+      "question": "我的文件会存储在服务器上吗？",
+      "answer": "不会。CloudDrop 使用 WebRTC 进行点对点传输。文件直接从发送者流向接收者。我们从不存储您的文件。"
+    },
+    "q3": {
+      "question": "它安全吗？",
+      "answer": "是的。所有传输都通过 WebRTC 的 DTLS（数据报传输层安全）进行加密。此外，我们对文件内容使用端到端加密，以确保隐私。"
+    },
+    "q4": {
+      "question": "为什么我连不上其他设备？",
+      "answer": "请确保两台设备都在同一网络下或都能访问互联网。如果您在限制性较强的网络（如公司防火墙）中，连接可能会失败。尝试刷新房间号。"
+    },
+    "stillHaveQuestions": "还有问题？",
+    "checkGithub": "查看 GitHub Issues"
+  },
+  "tos": {
+    "pageTitle": "服务条款",
+    "lastUpdated": "最后更新日期：2026年2月5日",
+    "intro": {
+      "title": "1. 简介",
+      "desc1": "欢迎使用 CloudDrop。使用我们的网站和服务即表示您同意这些服务条款。请仔细阅读。",
+      "desc2": "CloudDrop 是一个去中心化的点对点 (P2P) 文件共享工具。我们提供直接的设备间通信平台，无需服务器端存储。"
+    },
+    "service": {
+      "title": "2. 服务性质",
+      "p1": "<strong>无存储：</strong>CloudDrop 不存储您的文件。所有数据直接在用户的浏览器之间传输。",
+      "p2": "<strong>加密：</strong>虽然我们使用端到端加密 (E2EE)，但您理解互联网上的任何传输都不能保证 100% 安全。"
+    },
+    "responsibility": {
+      "title": "3. 用户责任",
+      "p1": "您对通过 CloudDrop 共享的内容承担全部责任。",
+      "p2": "您同意不使用该服务传输任何非法、侵权或有害的内容。"
+    },
+    "prohibited": {
+      "title": "4. 禁止活动",
+      "desc": "您不得：",
+      "item1": "违反任何当地、州或国际法律。",
+      "item2": "分发恶意软件、病毒或任何其他有害代码。",
+      "item3": "侵犯他人的知识产权。"
+    },
+    "disclaimer": {
+      "title": "5. 免责声明",
+      "desc": "CloudDrop 按“原样”和“可用”状态提供，不提供任何形式的保证。我们不保证服务不会中断或没有错误。"
+    },
+    "liability": {
+      "title": "6. 责任限制",
+      "desc": "在法律允许的最大范围内，CloudDrop 及其贡献者不对因使用服务而引起的任何间接、偶然、特殊或后果性损害负责。"
+    }
+  },
+  "techReport": {
+    "pageTitle": "技术架构报告",
+      "intro": {
+        "title": "CloudDrop 是如何工作的",
+        "desc": "CloudDrop 的设计初衷只有一个：在确保数据绝对安全的前提下传输您的文件。本报告将以通俗易懂的方式，为您揭示其背后的技术原理。"
+      },
+      "architecture": {
+        "title": "系统架构原理",
+        "desc": "与传统的云盘不同，CloudDrop 没有“云存储”中心。它更像是一根无形的管道，直接连接您的两台设备。",
+        "deviceA": "设备 A",
+        "deviceB": "设备 B"
+      },
+      "flow": {
+        "title": "数据传输之旅",
+        "step1": {
+          "title": "1. 发现",
+          "desc": "设备通过“房间号”在信令服务器上完成配对。注意：服务器只负责牵线搭桥，看不见任何文件内容。"
+        },
+        "step2": {
+          "title": "2. 连接",
+          "desc": "利用 WebRTC 技术，建立直接的点对点 (P2P) 连接。这就像在两台设备间架设了一条私密隧道。"
+        },
+        "step3": {
+          "title": "3. 加密",
+          "desc": "文件离开您的设备前已被加密。它穿过隧道，只有到达接收端时才会被解密。"
+        }
+      },
+      "security": {
+        "title": "为什么它是安全的",
+        "tunnel": "加密 P2P 隧道",
+        "points": [
+          {
+            "title": "零知识架构",
+            "desc": "我们不知道您传输了什么。加密密钥仅保留在您的浏览器中。"
+          },
+          {
+            "title": "即用即走",
+            "desc": "无须注册，无历史记录。关闭页面后，连接数据即刻清除。"
+          },
+          {
+            "title": "端侧处理",
+            "desc": "加密过程均在本地进行。隐私安全由密码学保证，不是光靠嘴上说说。"
+          }
+        ]
+      }
+    }
   }
-}

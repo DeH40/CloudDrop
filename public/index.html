@@ -5,24 +5,28 @@
   <meta charset="UTF-8">
   <meta name="viewport"
     content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
-  <meta name="description" content="CloudDrop - 安全的点对点文件共享，无需安装，端到端加密">
-  <meta name="keywords" content="文件传输,P2P,端到端加密,文件共享,WebRTC,安全传输,跨设备传输">
+  <meta name="description" content="CloudDrop - Free secure P2P file sharing. No file size limit, end-to-end encryption, no registration required. Transfer files instantly between devices.">
+  <meta name="keywords" content="file transfer, P2P file sharing, send files online, encrypted file transfer, cross-platform file share, no size limit">
   <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://cloudrop.cc/">
+  <link rel="alternate" hreflang="en" href="https://cloudrop.cc/" />
+  <link rel="alternate" hreflang="zh-CN" href="https://cloudrop.cc/?lang=zh" />
+  <link rel="alternate" hreflang="x-default" href="https://cloudrop.cc/" />
 
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://clouddrop.app/">
-  <meta property="og:title" content="CloudDrop - 安全 P2P 文件共享">
-  <meta property="og:description" content="安全的点对点文件共享工具，无需安装，端到端加密，支持跨设备即时传输">
-  <meta property="og:image" content="/og-image.png">
-  <meta property="og:locale" content="zh_CN">
+  <meta property="og:url" content="https://cloudrop.cc/">
+  <meta property="og:title" content="CloudDrop - Secure P2P File Transfer">
+  <meta property="og:description" content="Send files directly between devices with end-to-end encryption. No size limits, no server storage, completely free and open source.">
+  <meta property="og:image" content="https://cloudrop.cc/og-image.png">
+  <meta property="og:locale" content="en_US">
   <meta property="og:site_name" content="CloudDrop">
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="CloudDrop - 安全 P2P 文件共享">
-  <meta name="twitter:description" content="安全的点对点文件共享工具，无需安装，端到端加密，支持跨设备即时传输">
-  <meta name="twitter:image" content="/og-image.png">
+  <meta name="twitter:title" content="CloudDrop - Secure P2P File Transfer">
+  <meta name="twitter:description" content="Send files directly between devices with end-to-end encryption. No size limits, no server storage.">
+  <meta name="twitter:image" content="https://cloudrop.cc/og-image.png">
 
   <!-- PWA & Mobile -->
   <meta name="theme-color" content="#0f0f23">
@@ -40,6 +44,28 @@
   <link rel="stylesheet"
     href="https://fonts.loli.net/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap">
   <link rel="stylesheet" href="/style.css">
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "CloudDrop",
+      "operatingSystem": "Any (Web)",
+      "applicationCategory": "UtilitiesApplication",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "description": "Secure P2P file sharing tool with end-to-end encryption. No file size limits, no server storage.",
+      "featureList": "End-to-End Encryption, P2P Direct Transfer, No File Size Limit, No Registration",
+      "softwareVersion": "1.0.0",
+      "url": "https://cloudrop.cc",
+      "author": {
+        "@type": "Person",
+        "name": "DeH40"
+      }
+    }
+  </script>
 </head>
 
 <body>
@@ -60,7 +86,7 @@
             </linearGradient>
           </defs>
         </svg>
-        <span class="logo-text">CloudDrop</span>
+        <h1 class="logo-text">CloudDrop</h1>
       </div>
       <div class="header-right">
         <div class="device-name-info">
@@ -1339,6 +1365,20 @@
       </div>
     </div>
   </div>
+    <footer class="site-footer">
+      <div class="footer-content">
+        <div class="footer-links">
+          <a href="/about/" data-i18n="footer.about" title="About CloudDrop">About</a>
+          <a href="/security/" data-i18n="footer.security" title="Security Architecture">Security</a>
+          <a href="/faq/" data-i18n="footer.faq" title="Frequently Asked Questions">FAQ</a>
+          <a href="/tos/" data-i18n="footer.tos" title="Terms of Service">TOS</a>
+          <a href="/tech-report/" data-i18n="footer.techReport" title="Technical Report">Technical Report</a>
+        </div>
+        <div class="footer-copyright" data-i18n="footer.copyright">
+          © 2026 CloudDrop. Open Source P2P File Transfer.
+        </div>
+      </div>
+    </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
   <script type="module" src="/js/app.js"></script>

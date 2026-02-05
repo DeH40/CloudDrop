@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Technical report on CloudDrop's secure P2P file sharing architecture, explaining WebRTC, E2EE, and zero-knowledge design.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://cloudrop.cc/tech-report/">
+  <title data-i18n="techReport.pageTitle">Technical Architecture Report - CloudDrop</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.loli.net" crossorigin>
+  <link rel="stylesheet"
+    href="https://fonts.loli.net/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="apple-touch-icon" href="/favicon.svg">
+
+  <style>
+    /* Technical Diagram Styles */
+    .tech-diagram {
+      margin: 3rem 0;
+      padding: 2rem;
+      background: var(--bg-secondary);
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--glass-border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .diagram-track {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      max-width: 600px;
+      position: relative;
+      padding: 1rem 0;
+    }
+
+    .diagram-node {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.75rem;
+      z-index: 2;
+    }
+
+    .node-icon {
+      width: 60px;
+      height: 60px;
+      background: var(--bg-tertiary);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--glass-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent-primary);
+      box-shadow: var(--shadow-md);
+      transition: all 0.3s ease;
+    }
+
+    .node-icon svg {
+      width: 30px;
+      height: 30px;
+    }
+
+    .node-label {
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .diagram-arrow {
+      flex: 1;
+      height: 2px;
+      background: var(--glass-border);
+      position: relative;
+      margin: 0 1rem;
+    }
+
+    .diagram-arrow::after {
+      content: '';
+      position: absolute;
+      right: -2px;
+      top: -4px;
+      width: 10px;
+      height: 10px;
+      border-top: 2px solid var(--glass-border);
+      border-right: 2px solid var(--glass-border);
+      transform: rotate(45deg);
+    }
+
+    .arrow-data {
+      position: absolute;
+      top: -20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--accent-secondary);
+      white-space: nowrap;
+      animation: moveData 2s infinite linear;
+    }
+
+    @keyframes moveData {
+      0% { left: 0%; opacity: 0; }
+      20% { opacity: 1; }
+      80% { opacity: 1; }
+      100% { left: 100%; opacity: 0; }
+    }
+
+    .signal-node {
+      position: absolute;
+      top: -2rem;
+      background: var(--bg-tertiary);
+      padding: 0.5rem 1rem;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--glass-border);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .diagram-mesh {
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(var(--glass-border) 1px, transparent 1px);
+      background-size: 30px 30px;
+      opacity: 0.1;
+    }
+
+    .security-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1.5rem;
+      margin-top: 2rem;
+    }
+
+    .summary-card {
+      padding: 1.5rem;
+      background: var(--alpha-5);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-lg);
+      transition: all 0.3s ease;
+    }
+
+    .summary-card:hover {
+      background: var(--alpha-8);
+      border-color: var(--accent-primary);
+      transform: translateY(-2px);
+    }
+
+    .summary-card i {
+      display: block;
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+      color: var(--accent-primary);
+    }
+
+    .summary-card h4 {
+      margin-bottom: 0.5rem;
+      color: var(--text-primary);
+    }
+
+    .summary-card p {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <!-- Header -->
+    <header class="header">
+      <a href="/" class="logo" style="text-decoration: none;">
+        <svg class="logo-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="24" cy="24" r="20" fill="url(#logoGradient)" opacity="0.2" />
+          <path d="M24 8L24 28M24 28L32 20M24 28L16 20" stroke="url(#logoGradient)" stroke-width="3"
+            stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M12 32L12 36C12 38.2091 13.7909 40 16 40L32 40C34.2091 40 36 38.2091 36 36L36 32"
+            stroke="url(#logoGradient)" stroke-width="3" stroke-linecap="round" />
+          <defs>
+            <linearGradient id="logoGradient" x1="8" y1="8" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#60a5fa" />
+              <stop offset="1" stop-color="#a78bfa" />
+            </linearGradient>
+          </defs>
+        </svg>
+        <span class="logo-text">CloudDrop</span>
+      </a>
+      <div class="header-right">
+          <!-- Language Switcher -->
+          <div class="language-switcher">
+            <button class="btn-icon" id="languageBtn" title="Language">
+              <div class="language-flag" id="currentLanguageFlag"></div>
+              <span class="language-code" id="currentLanguageCode">ZH</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="chevron-down">
+                <path d="M6 9l6 6 6-6"></path>
+              </svg>
+            </button>
+            <div class="language-menu" id="languageMenu">
+              <button class="language-menu-item" data-lang="zh">
+                <svg class="language-flag" viewBox="0 0 36 24">
+                  <rect width="36" height="24" fill="#DE2910"/><polygon points="6,4 7.2,7.7 4,5.5 8,5.5 4.8,7.7" fill="#FFDE00"/><polygon points="12,2 12.4,3.2 11.2,2.4 12.8,2.4 11.6,3.2" fill="#FFDE00"/><polygon points="14,4 14.4,5.2 13.2,4.4 14.8,4.4 13.6,5.2" fill="#FFDE00"/><polygon points="14,7 14.4,8.2 13.2,7.4 14.8,7.4 13.6,8.2" fill="#FFDE00"/><polygon points="12,9 12.4,10.2 11.2,9.4 12.8,9.4 11.6,10.2" fill="#FFDE00"/>
+                </svg>
+                <span class="language-name">简体中文</span>
+                <svg class="language-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </button>
+              <button class="language-menu-item" data-lang="zh-HK">
+                <svg class="language-flag" viewBox="0 0 36 24">
+                  <rect width="36" height="24" fill="#DE2110"/>
+                  <g transform="translate(18,10) scale(0.75)">
+                    <g fill="white"><ellipse cx="0" cy="-5" rx="2" ry="4.5" transform="rotate(0)"/><ellipse cx="0" cy="-5" rx="2" ry="4.5" transform="rotate(72)"/><ellipse cx="0" cy="-5" rx="2" ry="4.5" transform="rotate(144)"/><ellipse cx="0" cy="-5" rx="2" ry="4.5" transform="rotate(216)"/><ellipse cx="0" cy="-5" rx="2" ry="4.5" transform="rotate(288)"/></g>
+                    <g fill="#DE2110"><line x1="0" y1="0" x2="0" y2="-6" stroke="#DE2110" stroke-width="0.6" transform="rotate(0)"/><line x1="0" y1="0" x2="0" y2="-6" stroke="#DE2110" stroke-width="0.6" transform="rotate(72)"/><line x1="0" y1="0" x2="0" y2="-6" stroke="#DE2110" stroke-width="0.6" transform="rotate(144)"/><line x1="0" y1="0" x2="0" y2="-6" stroke="#DE2110" stroke-width="0.6" transform="rotate(216)"/><line x1="0" y1="0" x2="0" y2="-6" stroke="#DE2110" stroke-width="0.6" transform="rotate(288)"/><circle cx="0" cy="-2.5" r="0.5" transform="rotate(36)"/><circle cx="0" cy="-2.5" r="0.5" transform="rotate(108)"/><circle cx="0" cy="-2.5" r="0.5" transform="rotate(180)"/><circle cx="0" cy="-2.5" r="0.5" transform="rotate(252)"/><circle cx="0" cy="-2.5" r="0.5" transform="rotate(324)"/></g>
+                  </g>
+                </svg>
+                <span class="language-name">繁體中文</span>
+                <svg class="language-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </button>
+              <button class="language-menu-item" data-lang="en">
+                <svg class="language-flag" viewBox="0 0 36 24">
+                  <rect width="36" height="24" fill="#B22234"/><rect y="1.85" width="36" height="1.85" fill="white"/><rect y="5.54" width="36" height="1.85" fill="white"/><rect y="9.23" width="36" height="1.85" fill="white"/><rect y="12.92" width="36" height="1.85" fill="white"/><rect y="16.62" width="36" height="1.85" fill="white"/><rect y="20.31" width="36" height="1.85" fill="white"/><rect width="14.4" height="13" fill="#3C3B6E"/>
+                </svg>
+                <span class="language-name">English</span>
+                <svg class="language-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </button>
+              <button class="language-menu-item" data-lang="ja">
+                <svg class="language-flag" viewBox="0 0 36 24">
+                  <rect width="36" height="24" fill="white"/><circle cx="18" cy="12" r="7" fill="#BC002D"/>
+                </svg>
+                <span class="language-name">日本語</span>
+                <svg class="language-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </button>
+              <button class="language-menu-item" data-lang="ko">
+                <svg class="language-flag" viewBox="0 0 36 24">
+                  <rect width="36" height="24" fill="white"/>
+                  <g transform="translate(18,12)">
+                    <circle cx="0" cy="0" r="6" fill="#C60C30"/><path d="M0,-6 A6,6 0 0,1 0,6 A3,3 0 0,1 0,0 A3,3 0 0,0 0,-6" fill="#003478"/><circle cx="0" cy="-3" r="3" fill="#C60C30"/><circle cx="0" cy="3" r="3" fill="#003478"/>
+                  </g>
+                  <g stroke="#000" stroke-width="1.2">
+                    <g transform="translate(5.5,5) rotate(-15)"><line x1="-3.5" y1="-2" x2="3.5" y2="-2"/><line x1="-3.5" y1="0" x2="3.5" y2="0"/><line x1="-3.5" y1="2" x2="3.5" y2="2"/></g>
+                    <g transform="translate(30.5,19) rotate(-15)"><line x1="-3.5" y1="-2" x2="-0.5" y2="-2"/><line x1="0.5" y1="-2" x2="3.5" y2="-2"/><line x1="-3.5" y1="0" x2="-0.5" y2="0"/><line x1="0.5" y1="0" x2="3.5" y2="0"/><line x1="-3.5" y1="2" x2="-0.5" y2="2"/><line x1="0.5" y1="2" x2="3.5" y2="2"/></g>
+                    <g transform="translate(30.5,5) rotate(15)"><line x1="-3.5" y1="-2" x2="-0.5" y2="-2"/><line x1="0.5" y1="-2" x2="3.5" y2="-2"/><line x1="-3.5" y1="0" x2="3.5" y2="0"/><line x1="-3.5" y1="2" x2="-0.5" y2="2"/><line x1="0.5" y1="2" x2="3.5" y2="2"/></g>
+                    <g transform="translate(5.5,19) rotate(15)"><line x1="-3.5" y1="-2" x2="3.5" y2="-2"/><line x1="-3.5" y1="0" x2="-0.5" y2="0"/><line x1="0.5" y1="0" x2="3.5" y2="0"/><line x1="-3.5" y1="2" x2="3.5" y2="2"/></g>
+                  </g>
+                </svg>
+                <span class="language-name">한국어</span>
+                <svg class="language-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </button>
+              <button class="language-menu-item" data-lang="es">
+                <svg class="language-flag" viewBox="0 0 36 24">
+                  <rect width="36" height="6" fill="#AA151B"/><rect y="6" width="36" height="12" fill="#F1BF00"/><rect y="18" width="36" height="6" fill="#AA151B"/>
+                </svg>
+                <span class="language-name">Español</span>
+                <svg class="language-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </button>
+              <button class="language-menu-item" data-lang="fr">
+                <svg class="language-flag" viewBox="0 0 36 24">
+                  <rect width="12" height="24" fill="#002395"/><rect x="12" width="12" height="24" fill="white"/><rect x="24" width="12" height="24" fill="#ED2939"/>
+                </svg>
+                <span class="language-name">Français</span>
+                <svg class="language-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </button>
+              <button class="language-menu-item" data-lang="de">
+                <svg class="language-flag" viewBox="0 0 36 24">
+                  <rect width="36" height="8" fill="#000"/><rect y="8" width="36" height="8" fill="#DD0000"/><rect y="16" width="36" height="8" fill="#FFCE00"/>
+                </svg>
+                <span class="language-name">Deutsch</span>
+                <svg class="language-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </button>
+              <button class="language-menu-item" data-lang="ar">
+                <svg class="language-flag" viewBox="0 0 36 24">
+                  <rect width="36" height="8" fill="#006C35"/><rect y="8" width="36" height="8" fill="white"/><rect y="16" width="36" height="8" fill="#000"/>
+                </svg>
+                <span class="language-name">العربية</span>
+                <svg class="language-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Theme Toggle Button -->
+          <button class="btn-icon theme-btn" id="themeBtn" title="Switch Theme">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+          </button>
+
+          <a href="/" class="btn-icon" title="Home">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path>
+                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+            </svg>
+          </a>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main" style="align-items: flex-start; max-width: 800px; margin: 0 auto; width: 100%;">
+      <article class="prose">
+        <h1 data-i18n="techReport.pageTitle" style="font-size: 2.5rem; margin-bottom: 2rem; background: var(--accent-gradient); background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Technical Architecture Report</h1>
+        
+        <div style="background: var(--bg-secondary); padding: 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--glass-border); margin-bottom: 2rem;">
+            <h2 data-i18n="techReport.intro.title" style="color: var(--text-primary); margin-bottom: 0.5rem;">How CloudDrop Works</h2>
+            <p data-i18n="techReport.intro.desc" style="color: var(--text-secondary); line-height: 1.8; margin-bottom: 0;">CloudDrop is designed with a single goal: to transfer your files securely without anyone else seeing them. This report explains how we achieve this using modern web technologies.</p>
+        </div>
+
+        <div style="background: var(--bg-secondary); padding: 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--glass-border); margin-bottom: 2rem;">
+          <h2 data-i18n="techReport.architecture.title" style="color: var(--text-primary); margin-bottom: 1rem;">System Architecture</h2>
+          <p data-i18n="techReport.architecture.desc" style="color: var(--text-secondary); line-height: 1.8; margin-bottom: 1.5rem;">
+            Unlike traditional file sharing services, CloudDrop doesn't have a central cloud storage. Instead, it creates a direct pipe between your devices.
+          </p>
+
+          <div class="tech-diagram" style="margin: 0; background: var(--bg-tertiary);">
+            <div class="diagram-mesh"></div>
+            <div class="signal-node" data-i18n="techReport.flow.step1.title">Discovery: Signaling Server</div>
+            
+            <div class="diagram-track">
+              <!-- Node 1: Sender -->
+              <div class="diagram-node">
+                <div class="node-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
+                  </svg>
+                </div>
+                <div class="node-label" data-i18n="techReport.architecture.deviceA">Device A</div>
+              </div>
+
+              <!-- Arrow: SECURE CHANNEL -->
+              <div class="diagram-arrow">
+                <div class="arrow-data" data-i18n="techReport.security.tunnel">Encrypted P2P Tunnel</div>
+              </div>
+
+              <!-- Node 2: Receiver -->
+              <div class="diagram-node">
+                <div class="node-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+                    <line x1="12" y1="18" x2="12.01" y2="18" />
+                  </svg>
+                </div>
+                <div class="node-label" data-i18n="techReport.architecture.deviceB">Device B</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="background: var(--bg-secondary); padding: 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--glass-border); margin-bottom: 2rem;">
+          <h2 data-i18n="techReport.flow.title" style="color: var(--text-primary); margin-bottom: 1.5rem;">Data Flow Journey</h2>
+          
+          <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+            <div style="display: flex; gap: 1.2rem; align-items: flex-start;">
+              <div style="flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; background: var(--alpha-10); border: 1px solid var(--accent-primary); display: flex; align-items: center; justify-content: center; color: var(--accent-primary); font-size: 0.875rem; font-weight: bold;">1</div>
+              <div>
+                <h4 data-i18n="techReport.flow.step1.title" style="margin-bottom: 0.3rem; color: var(--text-primary);">1. Discovery</h4>
+                <p data-i18n="techReport.flow.step1.desc" style="color: var(--text-secondary); line-height: 1.6; font-size: 0.9375rem; margin-bottom: 0;">Devices find each other using a 'Room Code' via our signaling server. Note: The server only matches the codes; it never sees your files.</p>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 1.2rem; align-items: flex-start;">
+              <div style="flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; background: var(--alpha-10); border: 1px solid var(--accent-primary); display: flex; align-items: center; justify-content: center; color: var(--accent-primary); font-size: 0.875rem; font-weight: bold;">2</div>
+              <div>
+                <h4 data-i18n="techReport.flow.step2.title" style="margin-bottom: 0.3rem; color: var(--text-primary);">2. Connection</h4>
+                <p data-i18n="techReport.flow.step2.desc" style="color: var(--text-secondary); line-height: 1.6; font-size: 0.9375rem; margin-bottom: 0;">A direct Peer-to-Peer (P2P) connection is established using WebRTC. This is like a private tunnel between the two devices.</p>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 1.2rem; align-items: flex-start;">
+              <div style="flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; background: var(--alpha-10); border: 1px solid var(--accent-primary); display: flex; align-items: center; justify-content: center; color: var(--accent-primary); font-size: 0.875rem; font-weight: bold;">3</div>
+              <div>
+                <h4 data-i18n="techReport.flow.step3.title" style="margin-bottom: 0.3rem; color: var(--text-primary);">3. Encryption</h4>
+                <p data-i18n="techReport.flow.step3.desc" style="color: var(--text-secondary); line-height: 1.6; font-size: 0.9375rem; margin-bottom: 0;">Before leaving your device, the file is encrypted. It travels through the tunnel and is only decrypted when it arrives at the other end.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 3rem;">
+          <h2 data-i18n="techReport.security.title" style="color: var(--text-primary); margin-bottom: 1.5rem;">Why It's Secure</h2>
+          
+          <div class="security-summary">
+            <div class="summary-card" style="background: var(--bg-secondary); border: 1px solid var(--glass-border);">
+              <i style="color: #10b981;">🛡️</i>
+              <h4 data-i18n="techReport.security.points.0.title">Zero Knowledge</h4>
+              <p data-i18n="techReport.security.points.0.desc" style="margin-bottom: 0;">We don't know what you are sending. The keys stay in your browser.</p>
+            </div>
+            <div class="summary-card" style="background: var(--bg-secondary); border: 1px solid var(--glass-border);">
+              <i style="color: #3b82f6;">⚡</i>
+              <h4 data-i18n="techReport.security.points.1.title">Ephemeral</h4>
+              <p data-i18n="techReport.security.points.1.desc" style="margin-bottom: 0;">No account, no history. Once you close the tab, the connection data is erased.</p>
+            </div>
+            <div class="summary-card" style="background: var(--bg-secondary); border: 1px solid var(--glass-border);">
+              <i style="color: #a855f7;">💻</i>
+              <h4 data-i18n="techReport.security.points.2.title">Client-Side</h4>
+              <p data-i18n="techReport.security.points.2.desc" style="margin-bottom: 0;">All processing happens locally. Your privacy is enforced by math, not promises.</p>
+            </div>
+          </div>
+        </div>
+      </article>
+    </main>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+      <div class="footer-content">
+        <div class="footer-links">
+          <a href="/about/" data-i18n="footer.about" title="About CloudDrop">About</a>
+          <a href="/security/" data-i18n="footer.security" title="Security Architecture">Security</a>
+          <a href="/faq/" data-i18n="footer.faq" title="Frequently Asked Questions">FAQ</a>
+          <a href="/tos/" data-i18n="footer.tos" title="Terms of Service">TOS</a>
+          <a href="/tech-report/" data-i18n="footer.techReport" title="Technical Report">Technical Report</a>
+        </div>
+        <div class="footer-copyright" data-i18n="footer.copyright">
+          © 2026 CloudDrop. Open Source P2P File Transfer.
+        </div>
+      </div>
+    </footer>
+  </div>
+  <script type="module" src="/js/static-page.js"></script>
+</body>
+
+</html>

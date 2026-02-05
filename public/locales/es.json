@@ -324,5 +324,154 @@
     "fileReceivedBody": "{{sender}} le envió un archivo: {{file}}",
     "messageReceived": "Nuevo mensaje",
     "messageReceivedBody": "{{sender}} le envió un mensaje"
+  },
+  "about": {
+    "title": "Sobre CloudDrop",
+    "mission": {
+      "title": "Nuestra Misión",
+      "desc": "Creemos que compartir archivos debe ser <strong>simple, seguro y privado</strong>. En una era donde la privacidad digital está constantemente amenazada, CloudDrop proporciona un santuario para sus datos. No almacenamos sus archivos; simplemente proporcionamos el túnel seguro para que viajen."
+    },
+    "why": {
+      "title": "¿Por qué CloudDrop?",
+      "noStorage": "Sin almacenamiento en servidor:",
+      "noStorageDesc": "Sus archivos van directamente del dispositivo A al dispositivo B.",
+      "e2ee": "Cifrado de extremo a extremo:",
+      "e2eeDesc": "Ni siquiera nosotros podemos ver lo que envía.",
+      "noLimits": "Sin límites:",
+      "noLimitsDesc": "Envíe archivos de cualquier tamaño, siempre que su navegador pueda manejarlo.",
+      "openSource": "Código abierto:",
+      "openSourceDesc": "Confianza a través de la transparencia. Nuestro código está abierto para que cualquiera lo audite."
+    },
+    "openSource": {
+      "title": "Código abierto",
+      "desc": "CloudDrop es orgullosamente de código abierto. Puede ver nuestro código fuente, contribuir o informar problemas en GitHub."
+    }
+  },
+  "securityPage": {
+    "pageTitle": "Seguridad y privacidad",
+    "zeroKnowledge": {
+      "title": "Arquitectura de conocimiento cero",
+      "desc": "No podemos leer sus archivos. No queremos hacerlo. CloudDrop está diseñado para que el servidor solo facilite la configuración de la conexión (señalización), pero la transferencia de datos ocurre directamente entre dispositivos (Peer-to-Peer)."
+    },
+    "e2ee": {
+      "title": "Cifrado de extremo a extremo",
+      "desc": "Cada archivo se cifra en el navegador antes de enviarse y solo se descifra después de recibirse. Utilizamos algoritmos criptográficos estándar y auditados:",
+      "algo": "<strong>Algoritmo:</strong> AES-256-GCM (Galois/Counter Mode)",
+      "keyExchange": "<strong>Intercambio de claves:</strong> ECDH a través de WebRTC DTLS",
+      "integrity": "<strong>Integridad:</strong> El cifrado autenticado asegura que los datos no hayan sido manipulados."
+    },
+    "p2p": {
+      "title": "Peer-to-Peer (WebRTC)",
+      "desc": "CloudDrop utiliza <strong>WebRTC</strong> para crear un canal de datos directo entre pares. Esto significa que, en la mayoría de los casos, los datos de su archivo nunca tocan un servidor, incluso en forma cifrada. Fluyen directamente desde su dispositivo al dispositivo del destinatario a través de la ruta de red más corta."
+    }
+  },
+  "faq": {
+    "pageTitle": "Preguntas frecuentes",
+    "q1": {
+      "question": "¿Hay un límite de tamaño de archivo?",
+      "answer": "No. Dado que CloudDrop transfiere archivos directamente entre dispositivos (P2P), no imponemos ningún límite de tamaño de archivo arbitrario. El único límite es la capacidad de su navegador y el almacenamiento disponible de su dispositivo."
+    },
+    "q2": {
+      "question": "¿Se almacenan mis archivos en un servidor?",
+      "answer": "No. CloudDrop utiliza WebRTC para la transferencia entre pares. Los archivos se transmiten directamente del remitente al receptor. Nunca almacenamos sus archivos."
+    },
+    "q3": {
+      "question": "¿Es seguro?",
+      "answer": "Sí. Todas las transferencias se cifran utilizando DTLS (Seguridad de la capa de transporte de datagramas) a través de WebRTC. Además, utilizamos cifrado de extremo a extremo para el contenido del archivo para garantizar la privacidad."
+    },
+    "q4": {
+      "question": "¿Por qué no puedo conectarme a otro dispositivo?",
+      "answer": "Asegúrese de que ambos dispositivos estén en la misma red o tengan acceso a Internet. Si se encuentra en una red restrictiva (como un firewall corporativo), la conexión podría fallar. Intente actualizar el código de la sala."
+    },
+    "stillHaveQuestions": "¿Todavía tiene preguntas?",
+    "checkGithub": "Revise nuestros problemas de GitHub"
+  },
+  "tos": {
+    "pageTitle": "Términos de servicio",
+    "lastUpdated": "Última actualización: 5 de febrero de 2026",
+    "intro": {
+      "title": "1. Introducción",
+      "desc1": "Bienvenido a CloudDrop. Al usar nuestro sitio web y servicios, acepta estos Términos de servicio. Léalos atentamente.",
+      "desc2": "CloudDrop es una herramienta descentralizada de intercambio de archivos entre pares (P2P). Proporcionamos la plataforma para la comunicación directa entre dispositivos sin almacenamiento en el servidor."
+    },
+    "service": {
+      "title": "2. Naturaleza del servicio",
+      "p1": "<strong>Sin almacenamiento:</strong> CloudDrop no almacena sus archivos. Todos los datos se transfieren directamente entre los navegadores de los usuarios.",
+      "p2": "<strong>Cifrado:</strong> Si bien utilizamos cifrado de extremo a extremo (E2EE), usted comprende que ninguna transmisión a través de Internet puede garantizarse como 100% segura."
+    },
+    "responsibility": {
+      "title": "3. Responsabilidad del usuario",
+      "p1": "Usted es el único responsable del contenido que comparte a través de CloudDrop.",
+      "p2": "Acepta no utilizar el servicio para transferir ningún contenido ilegal, infractor o dañino."
+    },
+    "prohibited": {
+      "title": "4. Actividades prohibidas",
+      "desc": "No puede:",
+      "item1": "Violar cualquier ley local, estatal o internacional.",
+      "item2": "Distribuir malware, virus o cualquier otro código dañino.",
+      "item3": "Infringir los derechos de propiedad intelectual de otros."
+    },
+    "disclaimer": {
+      "title": "5. Renuncia de garantías",
+      "desc": "CloudDrop se proporciona \"TAL CUAL\" y \"SEGÚN DISPONIBILIDAD\" sin garantías de ningún tipo. No garantizamos que el servicio sea ininterrumpido o libre de errores."
+    },
+    "liability": {
+      "title": "6. Limitación de responsabilidad",
+      "desc": "En la medida máxima permitida por la ley, CloudDrop y sus colaboradores no serán responsables de ningún daño indirecto, incidental, especial o consecuente que resulte del uso del servicio."
+    }
+  },
+  "footer": {
+    "about": "Acerca de",
+    "security": "Seguridad",
+    "faq": "Preguntas frecuentes",
+    "tos": "TOS",
+    "techReport": "Informe técnico",
+    "copyright": "© 2026 CloudDrop. Transferencia de archivos P2P de código abierto."
+  },
+  "techReport": {
+    "pageTitle": "Informe de arquitectura técnica",
+    "intro": {
+      "title": "Cómo funciona CloudDrop",
+      "desc": "CloudDrop está diseñado con un único objetivo: transferir sus archivos de forma segura sin que nadie más los vea. Este informe explica cómo logramos esto utilizando tecnologías web modernas."
+    },
+    "architecture": {
+      "title": "Arquitectura del sistema",
+      "desc": "A diferencia de los servicios tradicionales para compartir archivos, CloudDrop no tiene un almacenamiento central en la nube. En su lugar, crea un conducto directo entre sus dispositivos.",
+      "deviceA": "Dispositivo A",
+      "deviceB": "Dispositivo B"
+    },
+    "flow": {
+      "title": "Viaje del flujo de datos",
+      "step1": {
+        "title": "1. Descubrimiento",
+        "desc": "Los dispositivos se encuentran entre sí mediante un 'Código de sala' a través de nuestro servidor de señalización. Nota: El servidor solo hace coincidir los códigos; nunca ve sus archivos."
+      },
+      "step2": {
+        "title": "2. Conexión",
+        "desc": "Se establece una conexión directa Peer-to-Peer (P2P) mediante WebRTC. Esto es como un túnel privado entre los dos dispositivos."
+      },
+      "step3": {
+        "title": "3. Cifrado",
+        "desc": "Antes de salir de su dispositivo, el archivo se cifra. Viaja a través del túnel y solo se descifra cuando llega al otro extremo."
+      }
+    },
+    "security": {
+      "title": "Por qué es seguro",
+      "tunnel": "Túnel P2P cifrado",
+      "points": [
+        {
+          "title": "Conocimiento cero",
+          "desc": "No sabemos qué está enviando. Las llaves se quedan en su navegador."
+        },
+        {
+          "title": "Efímero",
+          "desc": "Sin cuenta, sin historial. Una vez que cierra la pestaña, los datos de la conexión se borran."
+        },
+        {
+          "title": "Lado del cliente",
+          "desc": "Todo el procesamiento ocurre localmente. Su privacidad está garantizada por las matemáticas, no por promesas."
+        }
+      ]
+    }
   }
 }
