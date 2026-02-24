@@ -217,7 +217,9 @@
     "imagePreviewFailed": "Vista previa de imagen fallida: {{error}}",
     "receivedImage": "{{name}} envió una imagen",
     "copyNotSupported": "Su navegador no soporta copiar imágenes, por favor haga clic derecho para copiar manualmente",
-    "imageCopied": "Imagen copiada al portapapeles"
+    "imageCopied": "Imagen copiada al portapapeles",
+    "undecryptable": "[Mensaje cifrado no descifrable]",
+    "undecryptableRelay": "[Mensaje de retransmisión no descifrable]"
   },
   "download": {
     "title": "Archivo recibido",

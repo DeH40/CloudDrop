@@ -171,6 +171,19 @@ export class CryptoManager {
   }
 
   /**
+   * Encrypt text message (E2EE)
+   * @param {string} peerId - Target peer ID
+   * @param {string} text - Text to encrypt
+   * @returns {Promise<string>} Base64-encoded encrypted package
+   */
+  async encryptText(peerId, text) {
+    const encoder = new TextEncoder();
+    const buffer = encoder.encode(text);
+    const encrypted = await this.encryptChunk(peerId, buffer);
+    return this.arrayBufferToBase64(encrypted);
+  }
+
+  /**
    * Decrypt a file chunk with prepended IVs (dual-layer decryption)
    * Layer 1: Peer-to-peer ECDH decryption
    * Layer 2: Room key decryption (if password is set)
@@ -205,6 +218,19 @@ export class CryptoManager {
     }
 
     return decrypted;
+  }
+
+  /**
+   * Decrypt text message (E2EE)
+   * @param {string} peerId - Source peer ID
+   * @param {string} base64Data - Base64-encoded encrypted package
+   * @returns {Promise<string>} Decrypted text
+   */
+  async decryptText(peerId, base64Data) {
+    const buffer = this.base64ToArrayBuffer(base64Data);
+    const decryptedBuffer = await this.decryptChunk(peerId, buffer);
+    const decoder = new TextDecoder();
+    return decoder.decode(decryptedBuffer);
   }
 
   /**

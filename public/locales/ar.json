@@ -221,7 +221,9 @@
     "imagePreviewFailed": "فشل معاينة الصورة: {{error}}",
     "receivedImage": "{{name}} أرسل صورة",
     "copyNotSupported": "متصفحك لا يدعم نسخ الصور، يرجى النقر بزر الماوس الأيمن للنسخ يدوياً",
-    "imageCopied": "تم نسخ الصورة إلى الحافظة"
+    "imageCopied": "تم نسخ الصورة إلى الحافظة",
+    "undecryptable": "[رسالة تعذر فك تشفيرها]",
+    "undecryptableRelay": "[رسالة ترحيل تعذر فك تشفيرها]"
   },
   "download": {
     "title": "تم استلام الملف",

@@ -216,7 +216,9 @@
     "imagePreviewFailed": "Image preview failed: {{error}}",
     "receivedImage": "{{name}} sent an image",
     "copyNotSupported": "Your browser doesn't support copying images, please right-click to copy manually",
-    "imageCopied": "Image copied to clipboard"
+    "imageCopied": "Image copied to clipboard",
+    "undecryptable": "[Undecryptable Message]",
+    "undecryptableRelay": "[Undecryptable Relay Message]"
   },
   "download": {
     "title": "File Received",

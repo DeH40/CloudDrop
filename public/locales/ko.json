@@ -215,7 +215,9 @@
     "imagePreviewFailed": "이미지 미리보기 실패: {{error}}",
     "receivedImage": "{{name}}이(가) 이미지를 보냈습니다",
     "copyNotSupported": "브라우저가 이미지 복사를 지원하지 않습니다. 우클릭하여 수동으로 복사하세요",
-    "imageCopied": "이미지가 클립보드에 복사됨"
+    "imageCopied": "이미지가 클립보드에 복사됨",
+    "undecryptable": "[복호화할 수 없는 메시지]",
+    "undecryptableRelay": "[복호화할 수 없는 릴레이 메시지]"
   },
   "download": {
     "title": "파일 수신 완료",

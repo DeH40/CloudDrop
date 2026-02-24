@@ -217,7 +217,9 @@
     "imagePreviewFailed": "Échec de l'aperçu de l'image : {{error}}",
     "receivedImage": "{{name}} a envoyé une image",
     "copyNotSupported": "Votre navigateur ne supporte pas la copie d'images, veuillez faire un clic droit pour copier manuellement",
-    "imageCopied": "Image copiée dans le presse-papiers"
+    "imageCopied": "Image copiée dans le presse-papiers",
+    "undecryptable": "[Message non déchiffrable]",
+    "undecryptableRelay": "[Message de relais non déchiffrable]"
   },
   "download": {
     "title": "Fichier reçu",

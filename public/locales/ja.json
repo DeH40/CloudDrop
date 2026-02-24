@@ -214,7 +214,9 @@
     "imagePreviewFailed": "画像のプレビューに失敗しました: {{error}}",
     "receivedImage": "{{name}}が画像を送信しました",
     "copyNotSupported": "お使いのブラウザは画像のコピーをサポートしていません。右クリックして手動でコピーしてください",
-    "imageCopied": "画像をクリップボードにコピーしました"
+    "imageCopied": "画像をクリップボードにコピーしました",
+    "undecryptable": "[復号できないメッセージ]",
+    "undecryptableRelay": "[復号できないリレーメッセージ]"
   },
   "download": {
     "title": "ファイルを受信しました",

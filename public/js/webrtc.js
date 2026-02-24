@@ -1537,7 +1537,16 @@ export class WebRTCManager {
         // Handle cancel message from data channel
         this.handleFileCancel(peerId, msg);
       } else if (msg.type === 'text') {
-        if (this.onTextReceived) this.onTextReceived(peerId, msg.content);
+        let content = msg.content;
+        if (msg.isEncrypted) {
+          try {
+            content = await cryptoManager.decryptText(peerId, msg.content);
+          } catch (e) {
+            console.error('[WebRTC] Failed to decrypt text message:', e);
+            content = i18n.t('chat.undecryptable');
+          }
+        }
+        if (this.onTextReceived) this.onTextReceived(peerId, content);
       }
     } else {
       const transfer = this.incomingTransfers.get(peerId);
@@ -1732,7 +1741,16 @@ export class WebRTCManager {
       // Handle ACK from receiver
       this.handleRelayAck(peerId, data);
     } else if (data.type === 'text') {
-      if (this.onTextReceived) this.onTextReceived(peerId, data.content);
+      let content = data.content;
+      if (data.isEncrypted) {
+        try {
+          content = await cryptoManager.decryptText(peerId, data.content);
+        } catch (e) {
+          console.error('[WebRTC] Failed to decrypt relay text message:', e);
+          content = i18n.t('chat.undecryptableRelay');
+        }
+      }
+      if (this.onTextReceived) this.onTextReceived(peerId, content);
     }
   }
 
@@ -1757,20 +1775,22 @@ export class WebRTCManager {
     }
 
     console.log(`[WebRTC] Sending text to ${peerId} via P2P`);
-    dc.send(JSON.stringify({ type: 'text', content: text }));
+    const encrypted = await cryptoManager.encryptText(peerId, text);
+    dc.send(JSON.stringify({ type: 'text', content: encrypted, isEncrypted: true }));
   }
 
   async _sendTextViaRelay(peerId, text) {
     // Ensure we have encryption key before sending
     if (!cryptoManager.hasSharedSecret(peerId)) {
-      console.log(`[WebRTC] No shared key for ${peerId}, exchanging keys via signaling...`);
+      console.log(`[WebRTC] No shared key for ${peerId}, exchanging keys...`);
       await this._exchangeKeysViaSignaling(peerId);
     }
 
+    const encrypted = await cryptoManager.encryptText(peerId, text);
     this.signaling.send({
       type: 'relay-data',
       to: peerId,
-      data: { type: 'text', content: text }
+      data: { type: 'text', content: encrypted, isEncrypted: true }
     });
   }
 

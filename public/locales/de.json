@@ -217,7 +217,9 @@
     "imagePreviewFailed": "Bildvorschau fehlgeschlagen: {{error}}",
     "receivedImage": "{{name}} hat ein Bild gesendet",
     "copyNotSupported": "Ihr Browser unterstützt das Kopieren von Bildern nicht, bitte klicken Sie mit der rechten Maustaste, um manuell zu kopieren",
-    "imageCopied": "Bild in die Zwischenablage kopiert"
+    "imageCopied": "Bild in die Zwischenablage kopiert",
+    "undecryptable": "[Unentschlüsselbare Nachricht]",
+    "undecryptableRelay": "[Unentschlüsselbare Relay-Nachricht]"
   },
   "download": {
     "title": "Datei empfangen",

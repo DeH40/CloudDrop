@@ -215,7 +215,9 @@
     "imagePreviewFailed": "圖片預覽失敗: {{error}}",
     "receivedImage": "{{name}} 發送了一張圖片",
     "copyNotSupported": "目前瀏覽器不支援複製圖片，請右鍵圖片自行複製",
-    "imageCopied": "圖片已複製到剪貼板"
+    "imageCopied": "圖片已複製到剪貼板",
+    "undecryptable": "[無法解密的消息]",
+    "undecryptableRelay": "[無法解密的中繼消息]"
   },
   "download": {
     "title": "文件接收完成",
