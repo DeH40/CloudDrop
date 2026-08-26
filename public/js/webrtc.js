@@ -328,12 +328,12 @@ export class WebRTCManager {
         console.log(`[WebRTC] Prewarming connection to ${peerId}`);
 
         try {
-          // Try P2P with fast timeout - but DON'T permanently mark as relay on failure
-          // This allows actual file transfer to retry P2P
+          // Try P2P with fast timeout - if it fails, switch to relay SILENTLY
+          // so the first message/file can go out instantly instead of re-racing
           const result = await this._raceP2PWithFallbackSilent(peerId);
           console.log(`[WebRTC] Prewarm result for ${peerId}: ${result}`);
         } catch (err) {
-          // Prewarm failure - just log, don't mark as relay
+          // Prewarm failure (e.g. relay fallback disabled) - just log
           // Actual file transfer will make its own decision
           console.log(`[WebRTC] Prewarm failed for ${peerId}: ${err.message} (will retry on actual transfer)`);
         }
@@ -553,6 +553,9 @@ export class WebRTCManager {
    * Handle ICE connection state changes with fast fallback logic
    */
   _handleIceConnectionStateChange(peerId, pc) {
+    // Ignore events from connections retired by internal teardown (background retry)
+    if (pc._retired) return;
+
     const state = pc.iceConnectionState;
 
     // Clear any disconnected timer
@@ -570,8 +573,10 @@ export class WebRTCManager {
       const timer = setTimeout(() => {
         if (pc.iceConnectionState === 'disconnected') {
           console.log(`[WebRTC] ICE still disconnected, fast-switching to relay...`);
-          // Silent switch if already in background recovery mode
-          this._switchToRelay(peerId, 'P2P连接失败，已切换到中继传输', isBackgroundRecovery);
+          // Silent switch if already in background recovery mode or during silent prewarm race
+          const racing = this.connectionRacing.get(peerId);
+          const isSilentRace = !!(racing && racing.silent && !racing.resolved);
+          this._switchToRelay(peerId, 'P2P连接失败，已切换到中继传输', isBackgroundRecovery || isSilentRace, isSilentRace);
         }
       }, DISCONNECTED_TIMEOUT);
       this.disconnectedTimers.set(peerId, timer);
@@ -587,15 +592,18 @@ export class WebRTCManager {
         this._attemptIceRestart(peerId, pc);
       } else {
         console.log(`[WebRTC] ICE failed for ${peerId} (restarts: ${restartCount}/${MAX_ICE_RESTARTS}, p2pPossible: ${quality?.p2pPossible}), switching to relay`);
-        // Silent switch if already in background recovery mode
-        this._switchToRelay(peerId, 'P2P连接失败，已切换到中继传输', isBackgroundRecovery);
+        // Silent switch if already in background recovery mode or during silent prewarm race
+        const racing = this.connectionRacing.get(peerId);
+        const isSilentRace = !!(racing && racing.silent && !racing.resolved);
+        this._switchToRelay(peerId, 'P2P连接失败，已切换到中继传输', isBackgroundRecovery || isSilentRace, isSilentRace);
       }
     } else if (state === 'connected' || state === 'completed') {
       // Reset restart counter on successful connection
       this.iceRestartCounts.delete(peerId);
-      // Clear relay mode if we have P2P
-      this.relayMode.delete(peerId);
-      console.log(`[WebRTC] ICE connected with ${peerId} (P2P mode)`);
+      // NOTE: do NOT clear relay mode here - only a fully opened data channel
+      // (setupDataChannel.onopen) upgrades the connection back to P2P.
+      // Clearing too early can strand the peer with neither P2P nor relay.
+      console.log(`[WebRTC] ICE connected with ${peerId}`);
     }
   }
 
@@ -605,7 +613,7 @@ export class WebRTCManager {
    * @param {string} message - Message to display (null for silent switch)
    * @param {boolean} silent - If true, don't show notification even on first switch
    */
-  _switchToRelay(peerId, message, silent = false) {
+  _switchToRelay(peerId, message, silent = false, skipP2PRetry = false) {
     const wasAlreadyRelay = this.relayMode.get(peerId);
 
     if (!wasAlreadyRelay) {
@@ -622,8 +630,14 @@ export class WebRTCManager {
         racing.winner = 'relay';
       }
 
-      // Start background P2P retry
-      this._startBackgroundP2PRetry(peerId);
+      // Start background P2P retry (skip when an in-flight attempt already covers it)
+      if (!skipP2PRetry) {
+        this._startBackgroundP2PRetry(peerId);
+      }
+
+      // Pre-exchange encryption keys (no-op if already done) so the first
+      // relay message doesn't wait for the ECDH handshake
+      this._prewarmEncryptionKeys(peerId);
     } else {
       // Already in relay mode - just log, no notification
       console.log(`[WebRTC] Already in relay mode for ${peerId}, skipping notification`);
@@ -691,6 +705,9 @@ export class WebRTCManager {
       // Close existing connection if any
       const existingPc = this.connections.get(peerId);
       if (existingPc) {
+        // Retire the old pc so its async state-change events are ignored
+        // (close() fires 'closed' later, which must not wipe relay mode)
+        existingPc._retired = true;
         existingPc.close();
         this.connections.delete(peerId);
       }
@@ -739,6 +756,9 @@ export class WebRTCManager {
    * Handle connection state changes
    */
   _handleConnectionStateChange(peerId, pc) {
+    // Ignore events from connections we retired internally (background retry teardown)
+    if (pc._retired) return;
+
     const state = pc.connectionState;
 
     if (state === 'failed') {
@@ -746,10 +766,12 @@ export class WebRTCManager {
       const restartCount = this.iceRestartCounts.get(peerId) || 0;
       if (restartCount >= MAX_ICE_RESTARTS) {
         console.log(`[WebRTC] Connection failed after ${restartCount} restarts, closing`);
-        this.closeConnection(peerId);
+        // If we're in relay mode, keep relay active - only clean up the dead P2P attempt
+        this.closeConnection(peerId, this.relayMode.get(peerId));
       }
     } else if (state === 'closed') {
-      this.closeConnection(peerId);
+      // Preserve relay mode when the close came from an internal teardown
+      this.closeConnection(peerId, this.relayMode.get(peerId));
     }
   }
 
@@ -1907,6 +1929,21 @@ export class WebRTCManager {
       return;
     }
 
+    // A race (e.g. silent prewarm) is already in progress for this peer - reuse
+    // its outcome instead of starting a second, competing race
+    const inFlightRace = this.connectionRacing.get(peerId);
+    if (inFlightRace && inFlightRace.promise) {
+      console.log(`[WebRTC] Reusing in-flight race for ${peerId}`);
+      const result = await inFlightRace.promise;
+      if (result === 'p2p' || result === 'relay') {
+        // Connection state already handled by the race (channel open or relay mode set)
+        if (result === 'p2p') this._notifyConnectionState(peerId, 'connected', null);
+        return;
+      }
+      // 'failed' - fall through and run our own race
+      console.log(`[WebRTC] In-flight race for ${peerId} failed, starting new attempt`);
+    }
+
     // Already establishing connection?
     if (this.pendingConnections.has(peerId)) {
       console.log(`[WebRTC] Waiting for pending connection to ${peerId}`);
@@ -1988,7 +2025,7 @@ export class WebRTCManager {
             console.log(`[WebRTC] P2P showing progress for ${peerId}, extending timeout`);
           }
         }
-      }, FAST_FALLBACK_TIMEOUT);
+      }, this.relayFallbackTimeout);
 
       // Ultimate timeout - switch to relay if P2P not established
       const ultimateTimer = setTimeout(() => {
@@ -2015,21 +2052,29 @@ export class WebRTCManager {
     });
 
     // Race: P2P success vs fallback timer
-    return Promise.race([
+    const racePromise = Promise.race([
       p2pPromise,
       fallbackPromise
     ]).finally(() => {
       this.connectionRacing.delete(peerId);
     });
+
+    // Expose the promise so concurrent callers (e.g. ensureConnection) can
+    // await the same race instead of starting a competing one
+    racingState.promise = racePromise;
+    return racePromise;
   }
 
   /**
    * Silent version of _raceP2PWithFallback for prewarming
-   * No UI notifications, doesn't permanently mark as relay on timeout
-   * This allows actual file transfer to retry P2P connection
+   * No UI toasts. On fallback the peer is SILENTLY marked as relay (badge only)
+   * and encryption keys are pre-exchanged, so the first message/file goes out
+   * instantly instead of re-running the whole race. The in-flight P2P attempt
+   * keeps running in the background - if it eventually opens a data channel,
+   * setupDataChannel.onopen upgrades the connection back to P2P automatically.
    */
   async _raceP2PWithFallbackSilent(peerId) {
-    const racingState = { resolved: false, winner: null };
+    const racingState = { resolved: false, winner: null, silent: true };
     this.connectionRacing.set(peerId, racingState);
 
     // Create P2P connection attempt (silent - no notification)
@@ -2042,44 +2087,89 @@ export class WebRTCManager {
       return 'p2p';
     }).catch(err => {
       console.log(`[WebRTC] Prewarm P2P failed for ${peerId}: ${err.message}`);
-      throw err;
+      // If we already fell back to relay, take over background P2P retrying now
+      // that the in-flight prewarm attempt has ended.
+      if (this.relayMode.get(peerId) && !this.p2pRetryTimers.has(peerId)) {
+        console.log(`[WebRTC] In-flight prewarm attempt ended for ${peerId}, starting background P2P retry`);
+        this._startBackgroundP2PRetry(peerId);
+      }
+      return racingState.winner || 'failed';
     });
 
-    // Fast fallback timer (shorter for prewarm)
+    // Proactive fallback: if P2P isn't established quickly, switch to relay
+    // silently (badge only) so subsequent sends are instant.
     const fallbackPromise = new Promise((resolve, reject) => {
+      const fallbackToRelay = () => {
+        if (racingState.resolved) return;
+        racingState.resolved = true;
+        racingState.winner = 'relay';
+        console.log(`[WebRTC] Prewarm falling back to relay for ${peerId} (proactive)`);
+        // Silent switch + skip background retry (the in-flight attempt above is still running)
+        this._switchToRelay(peerId, null, true, true);
+        resolve('relay');
+      };
+
+      // Fast fallback timer (respects user's relay fallback setting)
       const fallbackTimer = setTimeout(() => {
         if (!racingState.resolved) {
-          const shouldFallback = this._shouldFastFallback(peerId) || !this._hasP2PProgress(peerId);
+          const shouldFallback = this.relayFallbackEnabled &&
+            (this._shouldFastFallback(peerId) || !this._hasP2PProgress(peerId));
           if (shouldFallback) {
-            console.log(`[WebRTC] Prewarm fast-fallback triggered for ${peerId} (not marking as relay)`);
-            // DON'T mark as relay - let actual transfer decide
-            reject(new Error('Prewarm timeout - will retry on actual transfer'));
+            fallbackToRelay();
           }
         }
-      }, FAST_FALLBACK_TIMEOUT);
+      }, this.relayFallbackTimeout);
 
       // Ultimate timeout
       const ultimateTimer = setTimeout(() => {
         clearTimeout(fallbackTimer);
         if (!racingState.resolved) {
-          console.log(`[WebRTC] Prewarm ultimate timeout for ${peerId} (not marking as relay)`);
-          // DON'T mark as relay - let actual transfer decide
-          reject(new Error('Prewarm ultimate timeout - will retry on actual transfer'));
+          if (this.relayFallbackEnabled) {
+            fallbackToRelay();
+          } else {
+            reject(new Error('Prewarm ultimate timeout - will retry on actual transfer'));
+          }
         }
       }, CONNECTION_TIMEOUT);
 
-      p2pPromise.then(() => {
+      p2pPromise.then((result) => {
         clearTimeout(fallbackTimer);
         clearTimeout(ultimateTimer);
-        resolve('p2p');
-      }).catch(() => {
-        clearTimeout(fallbackTimer);
-        clearTimeout(ultimateTimer);
+        if (racingState.resolved) {
+          resolve(racingState.winner);
+        } else if (result === 'p2p') {
+          resolve('p2p');
+        } else if (this.relayFallbackEnabled) {
+          // P2P attempt failed before any timer fired - fall back now
+          fallbackToRelay();
+        } else {
+          resolve('failed');
+        }
       });
     });
 
-    return Promise.race([p2pPromise, fallbackPromise]).finally(() => {
+    const racePromise = Promise.race([p2pPromise, fallbackPromise]).finally(() => {
       this.connectionRacing.delete(peerId);
+    });
+
+    // Expose the promise so concurrent callers (e.g. ensureConnection) can
+    // await the same race instead of starting a competing one
+    racingState.promise = racePromise;
+    return racePromise;
+  }
+
+  /**
+   * Pre-exchange encryption keys for a peer (fire-and-forget)
+   * Called when proactively switching to relay so the first relay message
+   * doesn't have to wait for the ECDH handshake.
+   */
+  _prewarmEncryptionKeys(peerId) {
+    if (cryptoManager.hasSharedSecret(peerId)) return;
+
+    console.log(`[WebRTC] Pre-exchanging encryption keys with ${peerId} for relay mode`);
+    this._exchangeKeysViaSignaling(peerId).catch(err => {
+      // Non-fatal - the key exchange will be retried on first actual send
+      console.warn(`[WebRTC] Prewarm key exchange failed for ${peerId}: ${err.message}`);
     });
   }
 
@@ -2115,23 +2205,30 @@ export class WebRTCManager {
   }
 
   /**
-   * Check if P2P connection is making progress (has candidates, checking state)
+   * Check if P2P connection is making REAL progress
+   * A connection only gets the full ultimate timeout when there is actual NAT
+   * traversal evidence (srflx = STUN reachable, prflx = connectivity already
+   * worked). Host-only candidates with ICE stuck in 'checking' almost always
+   * means STUN/UDP is blocked and P2P will never connect - those cases fall
+   * back at the fast timeout instead of waiting the full 10s.
    */
   _hasP2PProgress(peerId) {
     const pc = this.connections.get(peerId);
     const types = this.candidateTypes.get(peerId);
 
-    // Has gathered some non-relay candidates? (including prflx for symmetric NAT)
-    const hasP2PCandidates = types && (
-      types.has('host') ||
+    // Real NAT traversal evidence: srflx (STUN reachable) or prflx (symmetric NAT)
+    const hasTraversalCandidates = types && (
       types.has('srflx') ||
-      types.has('prflx')  // Important for symmetric NAT traversal
+      types.has('prflx')
     );
 
-    // ICE is in a good state?
-    const iceGood = pc && ['new', 'checking', 'connected', 'completed'].includes(pc.iceConnectionState);
+    // ICE already connected/completed = definitely progressing (channel about to open)
+    const iceConnected = pc && ['connected', 'completed'].includes(pc.iceConnectionState);
 
-    return hasP2PCandidates && iceGood;
+    // ICE checking with traversal candidates = likely to succeed soon
+    const iceChecking = pc && pc.iceConnectionState === 'checking';
+
+    return iceConnected || (hasTraversalCandidates && iceChecking);
   }
 
   /**
@@ -2160,7 +2257,9 @@ export class WebRTCManager {
   }
 
   // Close connection and cleanup all state
-  closeConnection(peerId) {
+  closeConnection(peerId, preserveRelay = false) {
+    const wasRelay = this.relayMode.get(peerId);
+
     // Clear timers
     if (this.disconnectedTimers.has(peerId)) {
       clearTimeout(this.disconnectedTimers.get(peerId));
@@ -2185,9 +2284,20 @@ export class WebRTCManager {
     this.connectionQuality.delete(peerId);
     this.connectionRacing.delete(peerId);
     this.relayMode.delete(peerId);
+    if (preserveRelay && wasRelay) {
+      // Internal teardown while in relay mode - keep relay active so background
+      // P2P retry and relay messaging keep working
+      this.relayMode.set(peerId, true);
+      console.log(`[WebRTC] Relay mode preserved for ${peerId} during connection cleanup`);
+    }
     this.knownPeers?.delete(peerId);
 
-    cryptoManager.removePeer(peerId);
+    if (preserveRelay && wasRelay) {
+      // Keep the shared encryption secret so relay messaging keeps working
+      // without a new ECDH key exchange
+    } else {
+      cryptoManager.removePeer(peerId);
+    }
   }
 
   // Close all

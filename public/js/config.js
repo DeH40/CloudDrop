@@ -40,8 +40,10 @@ export const WEBRTC = {
   CHUNK_SIZE: 64 * 1024, // 64KB chunks
 
   // Connection timeouts
-  CONNECTION_TIMEOUT: 10000,        // 10 seconds max - give NAT traversal enough time
-  FAST_FALLBACK_TIMEOUT: 5000,      // 5 seconds - allow time for srflx/prflx candidates
+  CONNECTION_TIMEOUT: 10000,        // 10 seconds ultimate timeout - only reached when
+                                    // srflx/prflx evidence exists (slow but promising P2P)
+  FAST_FALLBACK_TIMEOUT: 5000,      // 5 seconds fast fallback - fired when there is no
+                                    // real NAT traversal evidence (STUN blocked, etc.)
   CANDIDATE_GATHERING_TIMEOUT: 3000, // 3 seconds to gather initial candidates
   SLOW_CONNECTION_THRESHOLD: 3000,  // Show "slow connection" hint after 3 seconds
   DISCONNECTED_TIMEOUT: 3000,       // 3 seconds before switching to relay
