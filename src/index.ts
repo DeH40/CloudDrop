@@ -15,28 +15,6 @@ export interface Env {
 }
 
 // =============================================================================
-// Per-IP rate limiting for the set-password endpoint (module scope)
-// Prevents room squatting/locking abuse. Resets when the isolate is evicted,
-// which is an acceptable trade-off for this protection level.
-// =============================================================================
-const setPasswordAttempts = new Map<string, { count: number; resetAt: number }>();
-const SET_PASSWORD_MAX_PER_IP = 5;            // 5 attempts
-const SET_PASSWORD_WINDOW_MS = 60 * 60 * 1000; // per hour, per IP
-
-function isSetPasswordRateLimited(ip: string): boolean {
-  const now = Date.now();
-  let entry = setPasswordAttempts.get(ip);
-
-  if (!entry || now > entry.resetAt) {
-    setPasswordAttempts.set(ip, { count: 1, resetAt: now + SET_PASSWORD_WINDOW_MS });
-    return false;
-  }
-
-  entry.count++;
-  return entry.count > SET_PASSWORD_MAX_PER_IP;
-}
-
-// =============================================================================
 // ICE servers (TURN credentials) caching + per-IP rate limiting
 // Each unique client previously triggered a fresh Cloudflare TURN API call -
 // expensive and abusable. Cache at module scope and throttle by IP.
@@ -70,10 +48,6 @@ export default {
     }
 
     // Handle room password APIs
-    if (url.pathname === '/api/room/set-password') {
-      return handleSetRoomPassword(request, env);
-    }
-
     if (url.pathname === '/api/room/check-password') {
       return handleCheckRoomPassword(request, env);
     }
@@ -218,7 +192,7 @@ async function handleIceServers(request: Request, env: Env): Promise<Response> {
  * IPv6: uses first 4 groups (/64 network prefix)
  * Local: uses 'localhost' as seed for consistent local room
  */
-async function generateRoomId(ip: string): Promise<string> {
+export async function generateRoomId(ip: string): Promise<string> {
   let networkPart: string;
 
   // For local development, use 'localhost' as seed
@@ -251,7 +225,7 @@ async function generateRoomId(ip: string): Promise<string> {
 /**
  * Expand abbreviated IPv6 address to full form
  */
-function expandIPv6(ip: string): string {
+export function expandIPv6(ip: string): string {
   // Remove IPv4-mapped suffix if present
   if (ip.includes('.')) {
     const lastColon = ip.lastIndexOf(':');
@@ -271,51 +245,6 @@ function expandIPv6(ip: string): string {
 
   // Already full, just pad each group
   return ip.split(':').map(g => g.padStart(4, '0')).join(':');
-}
-
-/**
- * Handle room password setting
- * Forwards request to the appropriate Room Durable Object
- */
-async function handleSetRoomPassword(request: Request, env: Env): Promise<Response> {
-  const url = new URL(request.url);
-  const roomParam = url.searchParams.get('room');
-
-  if (!roomParam || !/^[a-zA-Z0-9]{6}$/.test(roomParam)) {
-    return new Response(JSON.stringify({
-      success: false,
-      error: 'Invalid room code format'
-    }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
-  // Rate limit by client IP to prevent room squatting/locking abuse
-  const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
-  if (isSetPasswordRateLimited(clientIP)) {
-    return new Response(JSON.stringify({
-      success: false,
-      error: 'Too many attempts, please try again later'
-    }), {
-      status: 429,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
-  const roomId = `room-${roomParam.toLowerCase()}`;
-  const roomObjectId = env.ROOM.idFromName(roomId);
-  const roomStub = env.ROOM.get(roomObjectId);
-
-  // Forward request to Room Durable Object
-  const roomUrl = new URL(request.url);
-  roomUrl.pathname = '/set-password';
-
-  return roomStub.fetch(new Request(roomUrl.toString(), {
-    method: request.method,
-    headers: request.headers,
-    body: request.body,
-  }));
 }
 
 /**
