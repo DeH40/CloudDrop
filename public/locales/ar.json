@@ -253,7 +253,8 @@
     "shareNotSupported": "متصفحك لا يدعم المشاركة",
     "shareFailed": "فشلت المشاركة",
     "invalidRoomCode": "يرجى إدخال رمز الغرفة الكامل من 6 أرقام",
-    "notificationPermissionDenied": "تم رفض إذن الإشعارات في المتصفح"
+    "notificationPermissionDenied": "تم رفض إذن الإشعارات في المتصفح",
+    "filesSent": "تم إرسال {{count}} ملفات"
   },
   "settings": {
     "title": "الإعدادات",

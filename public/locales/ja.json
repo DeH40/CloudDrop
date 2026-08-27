@@ -247,7 +247,8 @@
     "shareNotSupported": "お使いのブラウザは共有をサポートしていません",
     "shareFailed": "共有に失敗しました",
     "invalidRoomCode": "完全な6桁のルームコードを入力してください",
-    "notificationPermissionDenied": "ブラウザ通知の許可が拒否されました"
+    "notificationPermissionDenied": "ブラウザ通知の許可が拒否されました",
+    "filesSent": "{{count}} 個のファイルを送信しました"
   },
   "settings": {
     "title": "設定",

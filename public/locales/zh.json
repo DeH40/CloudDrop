@@ -231,6 +231,7 @@
     "peerJoined": "{{name}} 已加入",
     "peerLeft": "{{name}} 已离开",
     "fileSent": "已发送: {{name}}",
+    "filesSent": "已发送 {{count}} 个文件",
     "fileDeclined": "{{name}} 拒绝了接收文件",
     "fileTimeout": "文件请求超时,对方未响应",
     "sendFailed": "发送失败: {{error}}",

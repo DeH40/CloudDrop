@@ -247,7 +247,8 @@
     "shareNotSupported": "你的瀏覽器不支援分享功能",
     "shareFailed": "分享失敗",
     "invalidRoomCode": "請輸入完整的6位房間號",
-    "notificationPermissionDenied": "瀏覽器通知權限被拒絕"
+    "notificationPermissionDenied": "瀏覽器通知權限被拒絕",
+    "filesSent": "已發送 {{count}} 個檔案"
   },
   "settings": {
     "title": "設定",

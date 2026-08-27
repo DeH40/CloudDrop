@@ -315,6 +315,7 @@ export class WebRTCManager {
     // Event-driven waiters (替代 100ms 轮询)
     this.channelWaiters = new Map(); // peerId -> { promise, resolve, reject, timer }
     this.keyWaiters = new Map(); // peerId -> { promise, resolve, reject, timer }
+    this.fileEndAckWaiters = new Map(); // fileId -> { resolve, timer }（接收方组装完成确认）
 
     // ICE candidate type tracking for smart fallback
     this.candidateTypes = new Map(); // peerId -> Set<'host'|'srflx'|'relay'>
@@ -1102,6 +1103,103 @@ export class WebRTCManager {
   }
 
   /**
+   * 批量发送多个文件：只弹一次确认框，确认后逐个传输
+   * @param {string} peerId - Target peer ID
+   * @param {File[]} files - Files to send
+   */
+  async sendFiles(peerId, files) {
+    // Try to establish connection (may result in P2P or relay)
+    await this.ensureConnection(peerId);
+
+    const isRelayMode = this.relayMode.get(peerId);
+
+    const metas = files.map(file => ({
+      fileId: crypto.randomUUID(),
+      name: file.name,
+      size: file.size,
+      mimeType: file.type || 'application/octet-stream',
+      totalChunks: Math.ceil(file.size / CHUNK_SIZE),
+      transferMode: isRelayMode ? 'relay' : 'p2p'
+    }));
+
+    // Step 1: Send one batch request and wait for a single confirmation
+    console.log(`[WebRTC] Requesting batch transfer permission (${files.length} files) from ${peerId}`);
+    const accepted = await this._requestFileTransferBatch(peerId, metas);
+
+    if (!accepted) {
+      throw new Error(ERROR_CODES.FILE_DECLINED);
+    }
+
+    // Step 2: Transfer each file sequentially
+    for (let i = 0; i < files.length; i++) {
+      const meta = metas[i];
+
+      // Notify about transfer start (for tracking/cancellation)
+      if (this.onTransferStart) {
+        this.onTransferStart({ peerId, fileId: meta.fileId, fileName: meta.name, fileSize: meta.size, direction: 'send' });
+      }
+
+      if (isRelayMode) {
+        console.log(`[WebRTC] Sending batch file ${i + 1}/${files.length} via relay: ${meta.name}`);
+        await this._sendFileDataViaRelay(peerId, files[i], meta.fileId);
+      } else {
+        // Verify we have a working P2P channel
+        const dc = this.dataChannels.get(peerId);
+        if (!dc || dc.readyState !== 'open') {
+          console.log(`[WebRTC] No P2P channel for batch, using relay for ${meta.name}`);
+          this._switchToRelay(peerId, null, true);
+          await this._sendFileDataViaRelay(peerId, files[i], meta.fileId);
+        } else {
+          console.log(`[WebRTC] Sending batch file ${i + 1}/${files.length} via P2P: ${meta.name}`);
+          await this._sendFileDataViaP2P(peerId, files[i], meta.fileId, dc);
+        }
+      }
+    }
+  }
+
+  /**
+   * 批量文件请求：一个 file-request 携带全部文件元数据，
+   * 接收方单次确认，响应 fileId 使用 batchId
+   * @returns {Promise<boolean>} - true if accepted, false if declined
+   */
+  _requestFileTransferBatch(peerId, metas) {
+    return new Promise((resolve, reject) => {
+      const batchId = crypto.randomUUID();
+
+      const timeoutId = setTimeout(() => {
+        this.pendingFileRequests.delete(batchId);
+        reject(new Error(ERROR_CODES.FILE_TIMEOUT));
+      }, this.FILE_REQUEST_TIMEOUT);
+
+      this.pendingFileRequests.set(batchId, {
+        peerId,
+        file: metas[0],
+        isBatch: true,
+        resolve: (accepted) => {
+          clearTimeout(timeoutId);
+          this.pendingFileRequests.delete(batchId);
+          resolve(accepted);
+        },
+        reject: (error) => {
+          clearTimeout(timeoutId);
+          this.pendingFileRequests.delete(batchId);
+          reject(error);
+        }
+      });
+
+      // Batch request always goes through signaling
+      this.signaling.send({
+        type: 'file-request',
+        to: peerId,
+        data: {
+          batchId,
+          files: metas
+        }
+      });
+    });
+  }
+
+  /**
    * Request file transfer permission from recipient
    * @returns {Promise<boolean>} - true if accepted, false if declined
    */
@@ -1344,6 +1442,10 @@ export class WebRTCManager {
       }
 
       dc.send(JSON.stringify({ type: 'file-end', fileId }));
+
+      // 等待接收方确认组装完成（批量发送顺序保障；兼容旧客户端超时放行）
+      const ok = await this._waitForFileEndAck(fileId);
+      if (!ok) throw new Error(ERROR_CODES.TRANSFER_FAILED);
     } finally {
       this.activeTransfers.delete(fileId);
     }
@@ -1485,6 +1587,10 @@ export class WebRTCManager {
       });
 
       console.log(`[WebRTC] Relay transfer complete: ${totalChunks} chunks sent`);
+
+      // 等待接收方确认组装完成（批量发送顺序保障；兼容旧客户端超时放行）
+      const ok = await this._waitForFileEndAck(fileId);
+      if (!ok) throw new Error(ERROR_CODES.TRANSFER_FAILED);
     } finally {
       // Keep transfer state for a grace period so the receiver can request
       // retransmission of chunks that were dropped in transit
@@ -1542,6 +1648,33 @@ export class WebRTCManager {
     transfer.lastAckTime = Date.now();
 
     console.log(`[WebRTC] Received ACK for chunks: ${acks.join(',')}, pending: ${transfer.pendingChunks.size}`);
+  }
+
+  /**
+   * 等待接收方对 file-end 的确认（组装完成/失败）
+   * 超时放行以兼容旧客户端
+   */
+  _waitForFileEndAck(fileId, timeout = 30000) {
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        this.fileEndAckWaiters.delete(fileId);
+        console.warn(`[WebRTC] file-end-ack 超时（兼容旧客户端）: ${fileId}`);
+        resolve(true);
+      }, timeout);
+      this.fileEndAckWaiters.set(fileId, { resolve, timer });
+    });
+  }
+
+  /**
+   * 接收方 file-end-ack 到达：唤醒发送方等待者
+   */
+  _resolveFileEndAck(fileId, ok) {
+    const waiter = this.fileEndAckWaiters.get(fileId);
+    if (waiter) {
+      clearTimeout(waiter.timer);
+      this.fileEndAckWaiters.delete(fileId);
+      waiter.resolve(ok !== false);
+    }
   }
 
   /**
@@ -1630,6 +1763,14 @@ export class WebRTCManager {
           // 无论成败都清理落盘分块
           if (transfer.useIdb) chunkStore.deleteFile(transfer.fileId).catch(() => {});
 
+          // 告知发送方组装结果（批量顺序保障）
+          const ackDc = this.dataChannels.get(peerId);
+          if (ackDc && ackDc.readyState === 'open') {
+            try {
+              ackDc.send(JSON.stringify({ type: 'file-end-ack', fileId: transfer.fileId, ok: !!blob }));
+            } catch (e) { /* 忽略 */ }
+          }
+
           if (!blob) {
             console.error(`[WebRTC] P2P transfer incomplete: ${chunkCount}/${expectedChunks} chunks, ${transfer.received}/${transfer.size} bytes - discarding`);
             if (this.onTransferFailed) {
@@ -1647,6 +1788,8 @@ export class WebRTCManager {
       } else if (msg.type === 'file-cancel') {
         // Handle cancel message from data channel
         this.handleFileCancel(peerId, msg);
+      } else if (msg.type === 'file-end-ack') {
+        this._resolveFileEndAck(msg.fileId, msg.ok);
       } else if (msg.type === 'text') {
         let content = msg.content;
         if (msg.isEncrypted) {
@@ -1803,6 +1946,12 @@ export class WebRTCManager {
         if (receivedCount !== expectedCount || transfer.received !== transfer.size) {
           console.error(`[WebRTC] Transfer incomplete: expected ${expectedCount} chunks (${transfer.size} bytes), got ${receivedCount} chunks (${transfer.received} bytes) - discarding`);
           if (transfer.useIdb) chunkStore.deleteFile(transfer.fileId).catch(() => {});
+          // 告知发送方组装失败（批量发送会中止后续文件）
+          this.signaling.send({
+            type: 'relay-data',
+            to: peerId,
+            data: { type: 'file-end-ack', fileId: transfer.fileId, ok: false }
+          });
           if (this.onTransferFailed) {
             this.onTransferFailed(peerId, transfer.fileId, transfer.name, 'incomplete');
           }
@@ -1827,6 +1976,13 @@ export class WebRTCManager {
 
         console.log(`[WebRTC] Transfer complete: ${receivedCount}/${expectedCount} chunks, size: ${blob.size}`);
 
+        // 告知发送方组装完成（批量顺序保障）
+        this.signaling.send({
+          type: 'relay-data',
+          to: peerId,
+          data: { type: 'file-end-ack', fileId: transfer.fileId, ok: true }
+        });
+
         if (this.onFileReceived) this.onFileReceived(peerId, transfer.name, blob);
         this.incomingTransfers.delete(peerId);
         this.activeTransfers.delete(transfer.fileId);
@@ -1846,6 +2002,8 @@ export class WebRTCManager {
           }
         }
       }
+    } else if (data.type === 'file-end-ack') {
+      this._resolveFileEndAck(data.fileId, data.ok);
     } else if (data.type === 'chunk') {
       const transfer = this.incomingTransfers.get(peerId);
       if (transfer && transfer.fileId === data.fileId) {
@@ -2507,9 +2665,14 @@ export class WebRTCManager {
     // Stop pending timers
     for (const timer of this.disconnectedTimers.values()) clearTimeout(timer);
     for (const timer of this.p2pRetryTimers.values()) clearTimeout(timer);
+    for (const waiter of this.fileEndAckWaiters.values()) {
+      clearTimeout(waiter.timer);
+      waiter.resolve(true);
+    }
     this.disconnectedTimers.clear();
     this.p2pRetryTimers.clear();
     this.p2pRetryAttempts.clear();
+    this.fileEndAckWaiters.clear();
 
     // Close all connections and clean up state
     this.closeAll();

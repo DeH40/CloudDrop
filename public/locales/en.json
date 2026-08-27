@@ -233,6 +233,7 @@
     "peerJoined": "{{name}} joined",
     "peerLeft": "{{name}} left",
     "fileSent": "Sent: {{name}}",
+    "filesSent": "Sent {{count}} files",
     "fileDeclined": "{{name}} declined to receive file",
     "fileTimeout": "File request timed out, no response from recipient",
     "sendFailed": "Send failed: {{error}}",

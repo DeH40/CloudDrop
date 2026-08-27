@@ -247,7 +247,8 @@
     "shareNotSupported": "브라우저가 공유를 지원하지 않습니다",
     "shareFailed": "공유 실패",
     "invalidRoomCode": "6자리 방 코드를 모두 입력하세요",
-    "notificationPermissionDenied": "브라우저 알림 권한이 거부되었습니다"
+    "notificationPermissionDenied": "브라우저 알림 권한이 거부되었습니다",
+    "filesSent": "{{count}}개의 파일을 보냈습니다"
   },
   "settings": {
     "title": "설정",

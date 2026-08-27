@@ -1305,9 +1305,18 @@ class CloudDrop {
   async handleFileRequest(peerId, data) {
     const peer = this.peers.get(peerId);
     const isRelayMode = data.transferMode === 'relay';
+    const isBatch = Array.isArray(data.files) && data.files.length > 1;
+
+    // 展示信息（批量：文件数+总大小）
+    const displayName = isBatch
+      ? i18n.t('transfer.fileCount', { count: data.files.length })
+      : data.name;
+    const displaySize = isBatch
+      ? data.files.reduce((sum, f) => sum + (f.size || 0), 0)
+      : data.size;
 
     // Store pending request info（并发请求时用局部引用避免串号）
-    const request = { peerId, fileId: data.fileId, data };
+    const request = { peerId, fileId: isBatch ? data.batchId : data.fileId, data, isBatch };
     this.pendingFileRequest = request;
 
     // Check if this device is trusted - auto-accept if so
@@ -1316,7 +1325,7 @@ class CloudDrop {
       const verified = await this.verifyPeerIdentity(peer);
       if (verified) {
         console.log(`[App] Auto-accepting file from trusted device: ${peer.name}`);
-        ui.showToast(i18n.t('toast.autoAccepting', { name: peer.name, file: data.name }), 'info');
+        ui.showToast(i18n.t('toast.autoAccepting', { name: peer.name, file: displayName }), 'info');
         this.acceptFileRequest(request);
         return;
       }
@@ -1329,8 +1338,8 @@ class CloudDrop {
       senderName: peer?.name || i18n.t('deviceTypes.unknown'),
       senderDeviceType: peer?.deviceType || 'desktop',
       senderBrowserInfo: peer?.browserInfo,
-      fileName: data.name,
-      fileSize: data.size,
+      fileName: displayName,
+      fileSize: displaySize,
       mode: isRelayMode ? 'relay' : 'p2p'
     });
 
@@ -1342,7 +1351,7 @@ class CloudDrop {
       ui.showBrowserNotification({
         type: 'file',
         senderName: peer?.name || i18n.t('deviceTypes.unknown'),
-        fileName: data.name
+        fileName: displayName
       });
     }
 
@@ -1357,7 +1366,7 @@ class CloudDrop {
   acceptFileRequest(request = this.pendingFileRequest) {
     if (!request) return;
 
-    const { peerId, fileId, data } = request;
+    const { peerId, fileId, data, isBatch } = request;
 
     // Send acceptance
     this.webrtc.respondToFileRequest(peerId, fileId, true);
@@ -1366,13 +1375,26 @@ class CloudDrop {
     this.currentTransfer = {
       peerId,
       fileId,
-      fileName: data.name,
+      fileName: isBatch ? i18n.t('transfer.fileCount', { count: data.files.length }) : data.name,
       direction: 'receive'
     };
 
     // Hide confirmation, show receiving progress
     ui.hideModal('receiveModal');
-    const isRelayMode = data.transferMode === 'relay';
+    const isRelayMode = data.transferMode === 'relay' || (isBatch && data.files[0]?.transferMode === 'relay');
+
+    if (isBatch) {
+      // 批量：后续每个文件的 file-start 会自行建立传输状态（confirmed 直接开始）
+      const totalSize = data.files.reduce((sum, f) => sum + (f.size || 0), 0);
+      ui.showReceivingModal(
+        i18n.t('transfer.fileCount', { count: data.files.length }),
+        totalSize,
+        isRelayMode ? 'relay' : 'p2p'
+      );
+      this.pendingFileRequest = null;
+      return;
+    }
+
     ui.showReceivingModal(data.name, data.size, isRelayMode ? 'relay' : 'p2p');
 
     // Initialize transfer state for receiving
@@ -1542,39 +1564,71 @@ class CloudDrop {
 
   async sendFiles(peerId, files) {
     const peer = this.peers.get(peerId);
-    for (const file of files) {
-      // Show waiting for confirmation
-      this.showWaitingForConfirmation(peer?.name || i18n.t('deviceTypes.unknown'), file.name);
+    const peerName = peer?.name || i18n.t('deviceTypes.unknown');
 
-      try {
-        // sendFile now handles the request/confirm flow internally
-        // It will throw if declined, timeout, or cancelled
-        // onTransferStart callback will set this.currentTransfer
-        await this.webrtc.sendFile(peerId, file);
+    if (!files || files.length === 0) return;
 
-        ui.hideModal('transferModal');
-        ui.showToast(i18n.t('toast.fileSent', { name: file.name }), 'success');
-      } catch (e) {
-        ui.hideModal('transferModal');
-        switch (e.message) {
-          case ERROR_CODES.FILE_DECLINED:
-            ui.showToast(i18n.t('toast.fileDeclined', { name: peer?.name || i18n.t('deviceTypes.unknown') }), 'warning');
-            break;
-          case ERROR_CODES.FILE_TIMEOUT:
-            ui.showToast(i18n.t('toast.fileTimeout'), 'warning');
-            break;
-          case ERROR_CODES.FILE_CANCELLED:
-            ui.showToast(i18n.t('transfer.transferCancelled'), 'info');
-            break;
-          case ERROR_CODES.MESSAGE_TOO_LARGE:
-            ui.showToast(i18n.t('errors.messageTooLarge'), 'error');
-            break;
-          default:
-            ui.showToast(i18n.t('toast.sendFailed', { error: e.message }), 'error');
-        }
-      } finally {
-        this.currentTransfer = null;
-      }
+    if (files.length === 1) {
+      await this.sendSingleFile(peerId, files[0], peerName);
+      return;
+    }
+
+    // 多文件：一次确认框，确认后逐个传输
+    this.showWaitingForConfirmation(peerName, i18n.t('transfer.fileCount', { count: files.length }));
+
+    try {
+      await this.webrtc.sendFiles(peerId, files);
+      ui.hideModal('transferModal');
+      ui.showToast(i18n.t('toast.filesSent', { count: files.length }), 'success');
+    } catch (e) {
+      this.handleSendError(e, peerName);
+    } finally {
+      this.currentTransfer = null;
+    }
+  }
+
+  /**
+   * 单文件发送（原有确认流程）
+   */
+  async sendSingleFile(peerId, file, peerName) {
+    // Show waiting for confirmation
+    this.showWaitingForConfirmation(peerName, file.name);
+
+    try {
+      // sendFile now handles the request/confirm flow internally
+      // It will throw if declined, timeout, or cancelled
+      // onTransferStart callback will set this.currentTransfer
+      await this.webrtc.sendFile(peerId, file);
+
+      ui.hideModal('transferModal');
+      ui.showToast(i18n.t('toast.fileSent', { name: file.name }), 'success');
+    } catch (e) {
+      this.handleSendError(e, peerName);
+    } finally {
+      this.currentTransfer = null;
+    }
+  }
+
+  /**
+   * 发送失败的统一错误分发（按错误码，与 i18n 解耦）
+   */
+  handleSendError(e, peerName) {
+    ui.hideModal('transferModal');
+    switch (e.message) {
+      case ERROR_CODES.FILE_DECLINED:
+        ui.showToast(i18n.t('toast.fileDeclined', { name: peerName }), 'warning');
+        break;
+      case ERROR_CODES.FILE_TIMEOUT:
+        ui.showToast(i18n.t('toast.fileTimeout'), 'warning');
+        break;
+      case ERROR_CODES.FILE_CANCELLED:
+        ui.showToast(i18n.t('transfer.transferCancelled'), 'info');
+        break;
+      case ERROR_CODES.MESSAGE_TOO_LARGE:
+        ui.showToast(i18n.t('errors.messageTooLarge'), 'error');
+        break;
+      default:
+        ui.showToast(i18n.t('toast.sendFailed', { error: e.message }), 'error');
     }
   }
 

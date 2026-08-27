@@ -249,7 +249,8 @@
     "shareNotSupported": "Votre navigateur ne supporte pas le partage",
     "shareFailed": "Échec du partage",
     "invalidRoomCode": "Veuillez entrer le code de salle complet à 6 chiffres",
-    "notificationPermissionDenied": "Permission de notification du navigateur refusée"
+    "notificationPermissionDenied": "Permission de notification du navigateur refusée",
+    "filesSent": "{{count}} fichiers envoyés"
   },
   "settings": {
     "title": "Paramètres",

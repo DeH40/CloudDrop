@@ -249,7 +249,8 @@
     "shareNotSupported": "Ihr Browser unterstützt das Teilen nicht",
     "shareFailed": "Teilen fehlgeschlagen",
     "invalidRoomCode": "Bitte geben Sie den vollständigen 6-stelligen Raumcode ein",
-    "notificationPermissionDenied": "Browser-Benachrichtigungsberechtigung verweigert"
+    "notificationPermissionDenied": "Browser-Benachrichtigungsberechtigung verweigert",
+    "filesSent": "{{count}} Dateien gesendet"
   },
   "settings": {
     "title": "Einstellungen",
