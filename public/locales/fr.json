@@ -132,7 +132,12 @@
       "other": "{{count}} appareils"
     },
     "transferIncomplete": "Transfert échoué : fichier incomplet, veuillez réessayer",
-    "safetyCodeTitle": "Code de sécurité : si les deux appareils affichent le même code, la connexion n'est pas compromise"
+    "safetyCodeTitle": "Code de sécurité : si les deux appareils affichent le même code, la connexion n'est pas compromise",
+    "safetyCodeClickHint": "Cliquer pour vérification complète (mots + QR + empreinte complète)",
+    "safetyCodeUnavailable": "Clé du pair pas encore prête",
+    "keyChanged": "Clé de l'appareil modifiée",
+    "keyChangedTitle": "La clé publique ne correspond pas à l'enregistrement de confiance. Vérifiez à nouveau",
+    "keyChangedToast": "La clé de {{name}} a changé. Confiance précédente révoquée"
   },
   "fileRequest": {
     "title": "Fichier reçu",
@@ -335,5 +340,14 @@
     "fileReceivedBody": "{{sender}} vous a envoyé un fichier : {{file}}",
     "messageReceived": "Nouveau message",
     "messageReceivedBody": "{{sender}} vous a envoyé un message"
+  },
+  "verify": {
+    "title": "Vérification complète",
+    "hint": "Ouvrez le panneau de vérification sur l'autre appareil et confirmez la correspondance.",
+    "words": "Mots de sécurité",
+    "fingerprint": "Empreinte complète (scanner)",
+    "warning": "Confirmez la correspondance puis épinglez la clé publique. En cas de changement, un avertissement rouge s'affichera.",
+    "confirmTrust": "Confirmer et faire confiance",
+    "trustedPinned": "Clé publique de {{name}} épinglée"
   }
 }

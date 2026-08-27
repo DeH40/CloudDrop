@@ -377,9 +377,9 @@ export function createPeerCard(peer) {
 }
 
 /**
- * 更新设备卡片的短安全码（SAS）
+ * 更新设备卡片的短安全码（快速提示码，点击可打开完整验证）
  * @param {string} peerId - Peer ID
- * @param {string|null} code - 8 位十六进制安全码，null 时隐藏
+ * @param {string|null} code - 8 位十六进制快速码，null 时隐藏
  */
 export function updatePeerSafetyCode(peerId, code) {
   const card = document.querySelector(`[data-peer-id="${peerId}"]`);
@@ -395,8 +395,57 @@ export function updatePeerSafetyCode(peerId, code) {
   }
 
   el.textContent = `🔒 ${code}`;
-  el.title = i18n.t('transfer.safetyCodeTitle');
+  el.title = i18n.t('transfer.safetyCodeClickHint');
   el.classList.add('visible');
+}
+
+/**
+ * 设备密钥变化红色警告（同名同 UA 但公钥指纹与已信任记录不一致）
+ * @param {string} peerId - Peer ID
+ * @param {boolean} warn - 是否显示警告
+ */
+export function updatePeerKeyWarning(peerId, warn) {
+  const card = document.querySelector(`[data-peer-id="${peerId}"]`);
+  if (!card) return;
+
+  const existing = card.querySelector('.peer-key-warning');
+  if (warn && !existing) {
+    const badge = document.createElement('div');
+    badge.className = 'peer-key-warning';
+    badge.title = i18n.t('transfer.keyChangedTitle');
+    badge.textContent = `⚠️ ${i18n.t('transfer.keyChanged')}`;
+    card.appendChild(badge);
+  } else if (!warn && existing) {
+    existing.remove();
+  }
+}
+
+/**
+ * 填充完整验证弹窗（快速码、6 个中文词、完整指纹、二维码）
+ */
+export function fillVerificationModal(peerName, info) {
+  const nameEl = document.getElementById('verifyPeerName');
+  const quickEl = document.getElementById('verifyQuickCode');
+  const wordsEl = document.getElementById('verifyWords');
+  const fpEl = document.getElementById('verifyFingerprint');
+
+  if (nameEl) nameEl.textContent = peerName;
+  if (quickEl) quickEl.textContent = info.quick;
+  if (wordsEl) {
+    wordsEl.textContent = info.words.map((w, i) => `${i + 1}. ${w}`).join('  ');
+  }
+  if (fpEl) fpEl.textContent = info.fingerprint;
+
+  // 二维码：编码完整公钥指纹，面对面扫码核对
+  const canvas = document.getElementById('verifyQr');
+  if (canvas) {
+    generateQRCode(canvas, JSON.stringify({
+      v: 1,
+      app: 'clouddrop',
+      type: 'peer-fingerprint',
+      fingerprint: info.fingerprint
+    }), { size: 200 });
+  }
 }
 
 /**

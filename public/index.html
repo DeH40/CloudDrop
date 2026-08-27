@@ -486,6 +486,46 @@
       </div>
     </div>
 
+    <!-- 完整验证弹窗（安全码：快速码 + 中文短词 + 完整指纹 + 二维码） -->
+    <div class="modal" id="peerVerifyModal">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content verify-modal">
+        <div class="modal-header">
+          <h3 class="modal-title" data-i18n="verify.title">完整验证设备</h3>
+          <button class="modal-close" id="peerVerifyClose">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="verify-device-name" id="verifyPeerName"></p>
+          <p class="verify-hint" data-i18n="verify.hint">在另一台设备上打开同一设备的验证面板，核对以下信息完全一致。</p>
+
+          <div class="verify-section">
+            <div class="verify-label" data-i18n="verify.words">安全词（口头核对）</div>
+            <div class="verify-words" id="verifyWords"></div>
+          </div>
+
+          <div class="verify-section">
+            <div class="verify-label" data-i18n="verify.fingerprint">完整指纹（扫码核对）</div>
+            <div class="verify-fingerprint" id="verifyFingerprint"></div>
+          </div>
+
+          <div class="verify-qr-wrap">
+            <canvas id="verifyQr"></canvas>
+          </div>
+
+          <p class="verify-warning" data-i18n="verify.warning">确认一致后点击下方按钮固定该设备公钥。若以后密钥发生变化，将显示红色警告并自动取消信任。</p>
+
+          <div class="verify-actions">
+            <button class="btn btn-secondary" id="peerVerifyCancel" data-i18n="common.cancel">取消</button>
+            <button class="btn btn-primary" id="peerVerifyConfirm" data-i18n="verify.confirmTrust">确认一致并信任</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Transfer Modal -->
     <div class="modal" id="transferModal">
       <div class="modal-backdrop"></div>

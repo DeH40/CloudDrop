@@ -130,7 +130,12 @@
       "other": "{{count}} 個のデバイス"
     },
     "transferIncomplete": "転送失敗：ファイルが不完全です。再試行してください",
-    "safetyCodeTitle": "安全コード：両端末で同じコードが表示されれば接続は改ざんされていません"
+    "safetyCodeTitle": "安全コード：両端末で同じコードが表示されれば接続は改ざんされていません",
+    "safetyCodeClickHint": "クリックで完全検証（単語 + QR + 完全な指紋）",
+    "safetyCodeUnavailable": "相手の鍵がまだ準備できていません",
+    "keyChanged": "端末の鍵が変更されました",
+    "keyChangedTitle": "端末の公開鍵が信頼済み記録と一致しません。再検証してください",
+    "keyChangedToast": "{{name}} の鍵が変更されました。以前の信頼は取り消されました"
   },
   "fileRequest": {
     "title": "ファイルを受信",
@@ -333,5 +338,14 @@
     "fileReceivedBody": "{{sender}} がファイルを送信しました：{{file}}",
     "messageReceived": "新しいメッセージ",
     "messageReceivedBody": "{{sender}} がメッセージを送信しました"
+  },
+  "verify": {
+    "title": "完全検証",
+    "hint": "もう一方の端末で同じ検証パネルを開き、情報が完全に一致することを確認してください。",
+    "words": "安全ワード（口頭確認）",
+    "fingerprint": "完全な指紋（スキャン）",
+    "warning": "一致を確認してこの端末の公開鍵を固定します。鍵が変わると赤い警告が表示され、信頼は取り消されます。",
+    "confirmTrust": "一致を確認して信頼",
+    "trustedPinned": "{{name}} の公開鍵を固定しました"
   }
 }

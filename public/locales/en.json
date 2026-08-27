@@ -132,7 +132,12 @@
     "deviceCount": {
       "one": "{{count}} device",
       "other": "{{count}} devices"
-    }
+    },
+    "safetyCodeClickHint": "Click for full verification (words + QR + full fingerprint)",
+    "safetyCodeUnavailable": "Peer key not ready yet, try again later",
+    "keyChanged": "Device key changed",
+    "keyChangedTitle": "This device's public key does not match the trusted record. It may have been reinstalled or replaced - please re-verify",
+    "keyChangedToast": "{{name}}'s key changed. Previous trust revoked, please re-verify"
   },
   "fileRequest": {
     "title": "File Received",
@@ -335,5 +340,14 @@
     "fileReceivedBody": "{{sender}} sent you a file: {{file}}",
     "messageReceived": "New message",
     "messageReceivedBody": "{{sender}} sent you a message"
+  },
+  "verify": {
+    "title": "Full Device Verification",
+    "hint": "Open the same device's verification panel on the other device and confirm the information matches exactly.",
+    "words": "Safety words (read aloud)",
+    "fingerprint": "Full fingerprint (scan)",
+    "warning": "Confirm they match, then pin this device's public key. If the key changes later, a red warning will be shown and trust will be revoked.",
+    "confirmTrust": "Confirm & Trust",
+    "trustedPinned": "Pinned {{name}}'s public key - no need to re-verify unless the key changes"
   }
 }

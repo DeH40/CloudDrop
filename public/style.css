@@ -560,6 +560,90 @@ body::after {
 
 .peer-safety-code.visible {
   display: inline-block;
+  cursor: pointer;
+}
+
+.peer-safety-code.visible:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.peer-key-warning {
+  font-size: 10px;
+  color: #ff5252;
+  margin-top: 2px;
+  cursor: help;
+}
+
+/* 完整验证弹窗 */
+.verify-modal {
+  max-width: 420px;
+}
+
+.verify-device-name {
+  font-weight: 600;
+  font-size: 16px;
+  text-align: center;
+  margin: 0 0 8px;
+}
+
+.verify-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+  margin: 0 0 16px;
+}
+
+.verify-section {
+  margin-bottom: 14px;
+}
+
+.verify-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.verify-words {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  line-height: 1.8;
+  word-break: break-all;
+}
+
+.verify-fingerprint {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 11px;
+  word-break: break-all;
+  line-height: 1.6;
+  opacity: 0.9;
+}
+
+.verify-qr-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 14px 0;
+}
+
+.verify-qr-wrap canvas {
+  border: 1px solid var(--border-color, rgba(255,255,255,0.1));
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px;
+}
+
+.verify-warning {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  margin: 0 0 14px;
+}
+
+.verify-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
 }
 
 /* ============================================

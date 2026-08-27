@@ -37,7 +37,7 @@ test('RELAY 配置合法性', () => {
   assert.ok(RELAY.RETRANSMIT_GRACE >= RELAY.RETRANSMIT_WAIT * RELAY.RETRANSMIT_ROUNDS);
 });
 
-test('SAS 安全码：双方独立计算一致且格式正确', async () => {
+test('SAS 快速码与完整验证：对称一致且格式正确', async () => {
   const a = cryptoManager;
   await a.generateKeyPair();
   // 生成两个独立密钥对模拟双方
@@ -48,19 +48,42 @@ test('SAS 安全码：双方独立计算一致且格式正确', async () => {
   const pubBB64 = a.arrayBufferToBase64(pubB);
 
   await a.importPeerPublicKey('peer-test', pubBB64);
-  const code = await a.computeSafetyCode('peer-test');
 
-  assert.match(code, /^[0-9A-F]{18}$/);
+  // 快速码：8 位十六进制（32 bit，仅提示用途）
+  const quick = await a.computeSafetyCode('peer-test');
+  assert.match(quick, /^[0-9A-F]{8}$/);
+
+  // 完整验证：66 bit 中文词 + 完整 64 hex 指纹
+  const full = await a.computeFullVerification('peer-test');
+  assert.equal(full.quick, quick);
+  assert.match(full.fingerprint, /^[0-9A-F]{64}$/);
+  assert.equal(full.words.length, 6);
 
   // 对称性：以 B 视角计算（排序后应一致）
   const pubA = await a.exportPublicKey();
   const sorted = [pubA, pubBB64].sort();
   const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(sorted[0] + sorted[1]));
-  const expected = Array.from(new Uint8Array(hash)).slice(0, 9)
+  const expected = Array.from(new Uint8Array(hash))
     .map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
-  assert.equal(code, expected);
+  assert.equal(full.fingerprint, expected);
 
   a.removePeer('peer-test');
+});
+
+test('安全词推导：确定性且索引在词表范围内', async () => {
+  const { SAS_WORDS, wordsFromDigest } = await import('../public/js/sasWords.js');
+  assert.equal(SAS_WORDS.length, 2048);
+  assert.equal(new Set(SAS_WORDS).size, 2048);
+
+  const digest = new Uint8Array(32);
+  digest[0] = 0xab; digest[1] = 0xcd; digest[2] = 0xef; digest[3] = 0x12;
+  const w1 = wordsFromDigest(digest, 6);
+  const w2 = wordsFromDigest(digest, 6);
+  assert.deepEqual(w1, w2); // 确定性
+  assert.equal(w1.length, 6);
+  for (const w of w1) {
+    assert.ok(SAS_WORDS.includes(w));
+  }
 });
 
 test('base64 往返一致（分块实现）', () => {

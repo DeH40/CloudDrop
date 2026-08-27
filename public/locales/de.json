@@ -132,7 +132,12 @@
       "other": "{{count}} Geräte"
     },
     "transferIncomplete": "Übertragung fehlgeschlagen: Datei unvollständig, bitte erneut versuchen",
-    "safetyCodeTitle": "Sicherheitscode: Zeigen beide Geräte denselben Code, wurde die Verbindung nicht manipuliert"
+    "safetyCodeTitle": "Sicherheitscode: Zeigen beide Geräte denselben Code, wurde die Verbindung nicht manipuliert",
+    "safetyCodeClickHint": "Klicken für vollständige Verifizierung (Wörter + QR + voller Fingerabdruck)",
+    "safetyCodeUnavailable": "Schlüssel des Peers noch nicht bereit",
+    "keyChanged": "Geräteschlüssel geändert",
+    "keyChangedTitle": "Der öffentliche Schlüssel stimmt nicht mit dem Vertrauensdatensatz überein. Bitte erneut prüfen",
+    "keyChangedToast": "Der Schlüssel von {{name}} hat sich geändert. Früheres Vertrauen widerrufen"
   },
   "fileRequest": {
     "title": "Datei empfangen",
@@ -335,5 +340,14 @@
     "fileReceivedBody": "{{sender}} hat Ihnen eine Datei gesendet: {{file}}",
     "messageReceived": "Neue Nachricht",
     "messageReceivedBody": "{{sender}} hat Ihnen eine Nachricht gesendet"
+  },
+  "verify": {
+    "title": "Vollständige Verifizierung",
+    "hint": "Öffnen Sie das Verifizierungsfenster auf dem anderen Gerät und bestätigen Sie die Übereinstimmung.",
+    "words": "Sicherheitswörter",
+    "fingerprint": "Voller Fingerabdruck (scannen)",
+    "warning": "Bestätigen Sie die Übereinstimmung und fixieren Sie den öffentlichen Schlüssel. Bei Änderungen erscheint eine rote Warnung.",
+    "confirmTrust": "Bestätigen & vertrauen",
+    "trustedPinned": "Öffentlicher Schlüssel von {{name}} fixiert"
   }
 }

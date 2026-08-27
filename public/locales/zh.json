@@ -130,7 +130,12 @@
     },
     "deviceCount": {
       "other": "{{count}} 个设备"
-    }
+    },
+    "safetyCodeClickHint": "点击查看完整验证（安全词 + 二维码 + 完整指纹）",
+    "safetyCodeUnavailable": "对方密钥尚未就绪，稍后再试",
+    "keyChanged": "设备密钥已变化",
+    "keyChangedTitle": "此设备的公钥与已信任记录不一致，可能是重装或设备被替换，请重新验证",
+    "keyChangedToast": "检测到 {{name}} 的密钥已变化，原信任已取消，请重新验证"
   },
   "fileRequest": {
     "title": "收到文件",
@@ -333,5 +338,14 @@
     "fileReceivedBody": "{{sender}} 发送了文件：{{file}}",
     "messageReceived": "收到新消息",
     "messageReceivedBody": "{{sender}} 发送了一条消息"
+  },
+  "verify": {
+    "title": "完整验证设备",
+    "hint": "在另一台设备上打开同一设备的验证面板，核对以下信息完全一致。",
+    "words": "安全词（口头核对）",
+    "fingerprint": "完整指纹（扫码核对）",
+    "warning": "确认一致后点击下方按钮固定该设备公钥。若以后密钥发生变化，将显示红色警告并自动取消信任。",
+    "confirmTrust": "确认一致并信任",
+    "trustedPinned": "已固定 {{name}} 的公钥，密钥不变无需重复验证"
   }
 }

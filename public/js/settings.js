@@ -132,6 +132,27 @@ export const SettingsMixin = {
     return !!fingerprint && this.trustedDevices.has(fingerprint);
   },
 
+  /**
+   * 设备密钥变化检测：同名 + 同浏览器信息但公钥指纹与已信任记录不一致，
+   * 说明设备密钥可能已更换（重装/被替换）——撤销旧信任并返回 true。
+   */
+  async detectKeyChange(peer) {
+    const fingerprint = await this.getDeviceFingerprint(peer);
+    if (!fingerprint) return false;
+
+    let changed = false;
+    for (const [oldFp, info] of this.trustedDevices.entries()) {
+      if (oldFp === fingerprint) continue;
+      if (info.name === peer.name && info.browserInfo === (peer.browserInfo || '')) {
+        // 同名同指纹来源的设备换了密钥：取消原信任
+        this.trustedDevices.delete(oldFp);
+        changed = true;
+      }
+    }
+    if (changed) this.saveTrustedDevices();
+    return changed;
+  },
+
   async trustDevice(peer) {
     const fingerprint = await this.getDeviceFingerprint(peer);
     if (!fingerprint) {

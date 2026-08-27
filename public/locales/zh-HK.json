@@ -130,7 +130,12 @@
       "other": "{{count}} 個設備"
     },
     "transferIncomplete": "傳輸失敗：檔案不完整，請重試",
-    "safetyCodeTitle": "安全碼：兩台裝置顯示一致即確認連線未被中間人篡改"
+    "safetyCodeTitle": "安全碼：兩台裝置顯示一致即確認連線未被中間人篡改",
+    "safetyCodeClickHint": "點擊查看完整驗證（安全詞 + 二維碼 + 完整指紋）",
+    "safetyCodeUnavailable": "對方密鑰尚未就緒，稍後再試",
+    "keyChanged": "裝置密鑰已變更",
+    "keyChangedTitle": "此裝置的公鑰與已信任記錄不一致，請重新驗證",
+    "keyChangedToast": "偵測到 {{name}} 的密鑰已變更，原信任已取消"
   },
   "fileRequest": {
     "title": "收到文件",
@@ -333,5 +338,14 @@
     "fileReceivedBody": "{{sender}} 發送了文件：{{file}}",
     "messageReceived": "收到新訊息",
     "messageReceivedBody": "{{sender}} 發送了一條訊息"
+  },
+  "verify": {
+    "title": "完整驗證裝置",
+    "hint": "在另一台裝置上開啟同一裝置的驗證面板，核對以下資訊完全一致。",
+    "words": "安全詞（口頭核對）",
+    "fingerprint": "完整指紋（掃碼核對）",
+    "warning": "確認一致後固定該裝置公鑰。若密鑰變更，將顯示紅色警告並自動取消信任。",
+    "confirmTrust": "確認一致並信任",
+    "trustedPinned": "已固定 {{name}} 的公鑰"
   }
 }

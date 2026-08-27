@@ -132,7 +132,12 @@
       "other": "{{count}} dispositivos"
     },
     "transferIncomplete": "Transferencia fallida: archivo incompleto, reintente",
-    "safetyCodeTitle": "Código de seguridad: si ambos dispositivos muestran el mismo código, la conexión no ha sido manipulada"
+    "safetyCodeTitle": "Código de seguridad: si ambos dispositivos muestran el mismo código, la conexión no ha sido manipulada",
+    "safetyCodeClickHint": "Clic para verificación completa (palabras + QR + huella completa)",
+    "safetyCodeUnavailable": "La clave del par aún no está lista",
+    "keyChanged": "La clave del dispositivo cambió",
+    "keyChangedTitle": "La clave pública no coincide con el registro de confianza. Verifica de nuevo",
+    "keyChangedToast": "La clave de {{name}} cambió. Confianza anterior revocada"
   },
   "fileRequest": {
     "title": "Archivo recibido",
@@ -335,5 +340,14 @@
     "fileReceivedBody": "{{sender}} le envió un archivo: {{file}}",
     "messageReceived": "Nuevo mensaje",
     "messageReceivedBody": "{{sender}} le envió un mensaje"
+  },
+  "verify": {
+    "title": "Verificación completa",
+    "hint": "Abre el panel de verificación en el otro dispositivo y confirma que la información coincide.",
+    "words": "Palabras de seguridad",
+    "fingerprint": "Huella completa (escanear)",
+    "warning": "Confirma que coinciden y fija la clave pública. Si cambia, se mostrará una advertencia roja y se revocará la confianza.",
+    "confirmTrust": "Confirmar y confiar",
+    "trustedPinned": "Clave pública de {{name}} fijada"
   }
 }

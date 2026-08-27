@@ -1371,10 +1371,18 @@ class CloudDrop {
     ui.addPeerToGrid(peer, document.getElementById('peersGrid'), (p, e) => this.onPeerClick(p, e));
 
     // Check if this device is trusted and show badge
-    this.isDeviceTrusted(peer).then((trusted) => {
+    this.isDeviceTrusted(peer).then(async (trusted) => {
       if (trusted) {
         // Small delay to ensure DOM is ready
         setTimeout(() => this.updateTrustedBadge(peer.id, true), 50);
+      } else {
+        // 设备密钥变化检测：同名同浏览器但指纹与已信任记录不一致
+        // → 红色警告 + 撤销旧信任
+        const changed = await this.detectKeyChange(peer);
+        if (changed) {
+          ui.updatePeerKeyWarning(peer.id, true);
+          ui.showToast(i18n.t('transfer.keyChangedToast', { name: peer.name }), 'warning');
+        }
       }
     });
 
@@ -1385,6 +1393,24 @@ class CloudDrop {
     if (this.webrtc) {
       this.webrtc.prewarmConnection(peer.id);
     }
+  }
+
+  /**
+   * 打开完整验证弹窗：快速码 + 6 个中文安全词 + 完整指纹 + 二维码
+   */
+  async showPeerVerificationModal(peerId) {
+    const peer = this.peers.get(peerId);
+    if (!peer) return;
+
+    const info = await cryptoManager.computeFullVerification(peerId);
+    if (!info) {
+      ui.showToast(i18n.t('transfer.safetyCodeUnavailable'), 'warning');
+      return;
+    }
+
+    this._verifyPeerId = peerId;
+    ui.fillVerificationModal(peer.name, info);
+    ui.showModal('peerVerifyModal');
   }
 
   /**
@@ -1726,6 +1752,34 @@ class CloudDrop {
 
     // 页面恢复可见时重连（配合 scheduleReconnect 的退避暂停）
     document.addEventListener('visibilitychange', () => this.handleVisibilityChange());
+
+    // 点击设备卡片上的快速安全码 → 打开完整验证弹窗
+    document.getElementById('peersGrid')?.addEventListener('click', (e) => {
+      const codeEl = e.target.closest('[data-role="safety-code"]');
+      if (!codeEl) return;
+      const card = codeEl.closest('[data-peer-id]');
+      if (card) this.showPeerVerificationModal(card.dataset.peerId);
+    });
+
+    // 完整验证弹窗按钮
+    document.getElementById('peerVerifyConfirm')?.addEventListener('click', async () => {
+      const peerId = this._verifyPeerId;
+      const peer = this.peers.get(peerId);
+      if (peer) {
+        await this.trustDevice(peer);
+        ui.showToast(i18n.t('verify.trustedPinned', { name: peer.name }), 'success');
+      }
+      ui.hideModal('peerVerifyModal');
+      this._verifyPeerId = null;
+    });
+    document.getElementById('peerVerifyCancel')?.addEventListener('click', () => {
+      ui.hideModal('peerVerifyModal');
+      this._verifyPeerId = null;
+    });
+    document.getElementById('peerVerifyClose')?.addEventListener('click', () => {
+      ui.hideModal('peerVerifyModal');
+      this._verifyPeerId = null;
+    });
 
     app.addEventListener('dragenter', (e) => {
       e.preventDefault();

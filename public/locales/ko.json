@@ -130,7 +130,12 @@
       "other": "기기 {{count}}대"
     },
     "transferIncomplete": "전송 실패: 파일이 불완전합니다. 다시 시도하세요",
-    "safetyCodeTitle": "보안 코드: 양쪽 기기에 같은 코드가 표시되면 연결이 변조되지 않은 것입니다"
+    "safetyCodeTitle": "보안 코드: 양쪽 기기에 같은 코드가 표시되면 연결이 변조되지 않은 것입니다",
+    "safetyCodeClickHint": "클릭하여 전체 검증(단어 + QR + 전체 지문)",
+    "safetyCodeUnavailable": "상대 키가 아직 준비되지 않았습니다",
+    "keyChanged": "기기 키가 변경되었습니다",
+    "keyChangedTitle": "이 기기의 공개 키가 신뢰 기록과 일치하지 않습니다. 다시 검증하세요",
+    "keyChangedToast": "{{name}}의 키가 변경되어 기존 신뢰가 취소되었습니다"
   },
   "fileRequest": {
     "title": "파일 수신",
@@ -333,5 +338,14 @@
     "fileReceivedBody": "{{sender}}님이 파일을 보냈습니다: {{file}}",
     "messageReceived": "새 메시지",
     "messageReceivedBody": "{{sender}}님이 메시지를 보냈습니다"
+  },
+  "verify": {
+    "title": "전체 검증",
+    "hint": "다른 기기에서 동일한 검증 패널을 열고 정보가 정확히 일치하는지 확인하세요.",
+    "words": "보안 단어(구두 확인)",
+    "fingerprint": "전체 지문(스캔)",
+    "warning": "일치를 확인한 후 이 기기의 공개 키를 고정합니다. 키가 변경되면 빨간 경고가 표시되고 신뢰가 취소됩니다.",
+    "confirmTrust": "확인 및 신뢰",
+    "trustedPinned": "{{name}}의 공개 키를 고정했습니다"
   }
 }

@@ -1,4 +1,5 @@
 import { debugLog } from './logger.js';
+import { wordsFromDigest } from './sasWords.js';
 
 /**
  * CloudDrop - End-to-End Encryption Module
@@ -137,9 +138,8 @@ export class CryptoManager {
   }
 
   /**
-   * 计算双方一致的短安全码（SAS）
-   * = SHA-256(排序后的双方公钥) 前 8 位十六进制
-   * 双方独立计算得到相同结果；信令被中间人篡改时两码不一致
+   * 快速提示码（8 位十六进制，32 bit）：主界面展示，仅用于发现普通连接错误，
+   * 不是强安全验证。强验证请用 computeFullVerification。
    */
   async computeSafetyCode(peerId) {
     const peerKey = this.peerPublicKeys.get(peerId);
@@ -149,8 +149,32 @@ export class CryptoManager {
     const [a, b] = [myKey, peerKey].sort();
     const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(a + b));
     const hashArray = Array.from(new Uint8Array(hashBuffer));
-    // 72 位（18 个十六进制字符），足够人工核对且不易撞码
-    return hashArray.slice(0, 9).map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
+    return hashArray.slice(0, 4).map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
+  }
+
+  /**
+   * 完整验证信息：双方公钥排序后 SHA-256
+   * - quick: 8 位快速码
+   * - words: 6 个 BIP39 中文词（66 bit），人工口头核对
+   * - fingerprint: 完整 64 位十六进制指纹（扫码/精确核对 + pin 信任）
+   */
+  async computeFullVerification(peerId) {
+    const peerKey = this.peerPublicKeys.get(peerId);
+    if (!peerKey) return null;
+
+    const myKey = await this.exportPublicKey();
+    const [a, b] = [myKey, peerKey].sort();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(a + b));
+    const bytes = new Uint8Array(hashBuffer);
+
+    const fingerprint = Array.from(bytes)
+      .map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
+
+    return {
+      quick: fingerprint.slice(0, 8),
+      words: wordsFromDigest(bytes, 6),
+      fingerprint
+    };
   }
 
   /**
