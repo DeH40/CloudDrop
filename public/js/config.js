@@ -74,6 +74,17 @@ export const P2P_RETRY = {
 };
 
 // =============================================================================
+// Error Codes (shared between webrtc.js and app.js)
+// =============================================================================
+export const ERROR_CODES = {
+  FILE_DECLINED: 'FILE_DECLINED',
+  FILE_TIMEOUT: 'FILE_TIMEOUT',
+  FILE_CANCELLED: 'FILE_CANCELLED',
+  MESSAGE_TOO_LARGE: 'MESSAGE_TOO_LARGE',
+  TRANSFER_FAILED: 'TRANSFER_FAILED',
+};
+
+// =============================================================================
 // File Transfer Configuration
 // =============================================================================
 export const TRANSFER = {

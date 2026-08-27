@@ -5,7 +5,7 @@
 import { WebRTCManager } from './webrtc.js';
 import { cryptoManager } from './crypto.js';
 import * as ui from './ui.js';
-import { STORAGE_KEYS, ROOM, DEFAULT_SETTINGS } from './config.js';
+import { STORAGE_KEYS, ROOM, DEFAULT_SETTINGS, ERROR_CODES } from './config.js';
 import { i18n } from './i18n.js';
 
 class CloudDrop {
@@ -1393,14 +1393,21 @@ class CloudDrop {
         ui.showToast(i18n.t('toast.fileSent', { name: file.name }), 'success');
       } catch (e) {
         ui.hideModal('transferModal');
-        if (e.message.includes('拒绝') || e.message.includes('declined')) {
-          ui.showToast(i18n.t('toast.fileDeclined', { name: peer?.name || i18n.t('deviceTypes.unknown') }), 'warning');
-        } else if (e.message.includes('超时') || e.message.includes('timeout')) {
-          ui.showToast(i18n.t('toast.fileTimeout'), 'warning');
-        } else if (e.message.includes('取消') || e.message.includes('cancelled')) {
-          ui.showToast(i18n.t('transfer.transferCancelled'), 'info');
-        } else {
-          ui.showToast(i18n.t('toast.sendFailed', { error: e.message }), 'error');
+        switch (e.message) {
+          case ERROR_CODES.FILE_DECLINED:
+            ui.showToast(i18n.t('toast.fileDeclined', { name: peer?.name || i18n.t('deviceTypes.unknown') }), 'warning');
+            break;
+          case ERROR_CODES.FILE_TIMEOUT:
+            ui.showToast(i18n.t('toast.fileTimeout'), 'warning');
+            break;
+          case ERROR_CODES.FILE_CANCELLED:
+            ui.showToast(i18n.t('transfer.transferCancelled'), 'info');
+            break;
+          case ERROR_CODES.MESSAGE_TOO_LARGE:
+            ui.showToast(i18n.t('errors.messageTooLarge'), 'error');
+            break;
+          default:
+            ui.showToast(i18n.t('toast.sendFailed', { error: e.message }), 'error');
         }
       } finally {
         this.currentTransfer = null;
@@ -1532,7 +1539,7 @@ class CloudDrop {
       this.saveMessage(peerId, { type: 'sent', text, timestamp: Date.now() });
       return true;
     } catch (e) {
-      if (e.message === 'MESSAGE_TOO_LARGE') {
+      if (e.message === ERROR_CODES.MESSAGE_TOO_LARGE) {
         ui.showToast(i18n.t('errors.messageTooLarge'), 'error');
       } else {
         ui.showToast(i18n.t('toast.sendFailed', { error: e.message }), 'error');
@@ -1571,7 +1578,7 @@ class CloudDrop {
       });
       return true;
     } catch (e) {
-      if (e.message === 'MESSAGE_TOO_LARGE') {
+      if (e.message === ERROR_CODES.MESSAGE_TOO_LARGE) {
         ui.showToast(i18n.t('errors.messageTooLarge'), 'error');
       } else {
         ui.showToast(i18n.t('chat.imageSendFailed', { error: e.message }), 'error');

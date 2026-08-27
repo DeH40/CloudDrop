@@ -11,7 +11,7 @@
  */
 
 import { cryptoManager } from './crypto.js';
-import { WEBRTC, P2P_RETRY, RELAY } from './config.js';
+import { WEBRTC, P2P_RETRY, RELAY, ERROR_CODES } from './config.js';
 import { i18n } from './i18n.js';
 
 // Destructure config for convenience
@@ -1038,7 +1038,7 @@ export class WebRTCManager {
     const accepted = await this._requestFileTransfer(peerId, file, fileId, isRelayMode);
 
     if (!accepted) {
-      throw new Error('对方拒绝了文件接收');
+      throw new Error(ERROR_CODES.FILE_DECLINED);
     }
 
     // Step 2: Actually transfer the file
@@ -1067,7 +1067,7 @@ export class WebRTCManager {
     return new Promise((resolve, reject) => {
       const timeoutId = setTimeout(() => {
         this.pendingFileRequests.delete(fileId);
-        reject(new Error('文件请求超时，对方未响应'));
+        reject(new Error(ERROR_CODES.FILE_TIMEOUT));
       }, this.FILE_REQUEST_TIMEOUT);
 
       this.pendingFileRequests.set(fileId, {
@@ -1212,7 +1212,7 @@ export class WebRTCManager {
     // Also check pending file requests (cancel during confirmation wait)
     const pendingRequest = this.pendingFileRequests.get(fileId);
     if (pendingRequest) {
-      pendingRequest.reject(new Error('对方取消了传输'));
+      pendingRequest.reject(new Error(ERROR_CODES.FILE_CANCELLED));
     }
 
     // Notify via callback
@@ -1265,7 +1265,7 @@ export class WebRTCManager {
         const transfer = this.activeTransfers.get(fileId);
         if (!transfer || transfer.cancelled) {
           console.log(`[WebRTC] Transfer ${fileId} was cancelled`);
-          throw new Error('传输已取消');
+          throw new Error(ERROR_CODES.FILE_CANCELLED);
         }
 
         const chunk = file.slice(offset, offset + CHUNK_SIZE);
@@ -1276,7 +1276,7 @@ export class WebRTCManager {
           // Check cancellation during buffer wait
           const t = this.activeTransfers.get(fileId);
           if (!t || t.cancelled) {
-            throw new Error('传输已取消');
+            throw new Error(ERROR_CODES.FILE_CANCELLED);
           }
           await new Promise(r => setTimeout(r, 10));
         }
@@ -1348,7 +1348,7 @@ export class WebRTCManager {
         const transfer = this.activeTransfers.get(fileId);
         if (!transfer || transfer.cancelled) {
           console.log(`[WebRTC] Relay transfer ${fileId} was cancelled`);
-          throw new Error('传输已取消');
+          throw new Error(ERROR_CODES.FILE_CANCELLED);
         }
 
         // Flow control: wait if too many unacknowledged chunks
@@ -1361,7 +1361,7 @@ export class WebRTCManager {
               const { index, data, retries } = oldestPending;
               if (retries >= RELAY.MAX_CHUNK_RETRIES) {
                 console.error(`[WebRTC] Chunk ${index} failed after ${retries} retries`);
-                throw new Error('传输失败：数据块重传次数过多');
+                throw new Error(ERROR_CODES.TRANSFER_FAILED);
               }
               console.log(`[WebRTC] Retransmitting chunk ${index}, retry ${retries + 1}`);
               this._sendChunk(peerId, fileId, index, data.base64, retries + 1);
@@ -1372,7 +1372,7 @@ export class WebRTCManager {
 
           // Check cancellation during wait
           if (transfer.cancelled) {
-            throw new Error('传输已取消');
+            throw new Error(ERROR_CODES.FILE_CANCELLED);
           }
 
           await new Promise(r => setTimeout(r, 50));
@@ -1380,7 +1380,7 @@ export class WebRTCManager {
 
         // Check transfer timeout (no progress)
         if (Date.now() - transfer.lastAckTime > RELAY.TRANSFER_TIMEOUT && chunkIndex > 0) {
-          throw new Error('传输超时：接收方无响应');
+          throw new Error(ERROR_CODES.FILE_TIMEOUT);
         }
 
         const chunk = file.slice(offset, offset + CHUNK_SIZE);
@@ -1422,7 +1422,7 @@ export class WebRTCManager {
           break;
         }
         if (transferState.cancelled) {
-          throw new Error('传输已取消');
+          throw new Error(ERROR_CODES.FILE_CANCELLED);
         }
         await new Promise(r => setTimeout(r, 100));
       }
@@ -1839,7 +1839,7 @@ export class WebRTCManager {
     // Pre-check: oversized messages fail loudly instead of silently breaking
     // the data channel (or being dropped by the relay server)
     if (payload.length > MAX_TEXT_PAYLOAD) {
-      throw new Error('MESSAGE_TOO_LARGE');
+      throw new Error(ERROR_CODES.MESSAGE_TOO_LARGE);
     }
 
     dc.send(payload);
@@ -1858,7 +1858,7 @@ export class WebRTCManager {
     // Pre-check against the server 256KB limit - fail loudly instead of
     // letting the server drop the message silently
     if (JSON.stringify(relayPayload).length > MAX_TEXT_PAYLOAD) {
-      throw new Error('MESSAGE_TOO_LARGE');
+      throw new Error(ERROR_CODES.MESSAGE_TOO_LARGE);
     }
 
     this.signaling.send({
