@@ -149,7 +149,8 @@ export class CryptoManager {
     const [a, b] = [myKey, peerKey].sort();
     const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(a + b));
     const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.slice(0, 4).map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
+    // 72 位（18 个十六进制字符），足够人工核对且不易撞码
+    return hashArray.slice(0, 9).map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
   }
 
   /**
@@ -158,7 +159,7 @@ export class CryptoManager {
    * @param {ArrayBuffer} data - Data to encrypt
    * @returns {Promise<{encrypted: ArrayBuffer, iv: Uint8Array}>}
    */
-  async encrypt(peerId, data) {
+  async encrypt(peerId, data, additionalData) {
     const sharedKey = this.sharedSecrets.get(peerId);
     if (!sharedKey) {
       throw new Error(`No shared key for peer: ${peerId}`);
@@ -170,7 +171,8 @@ export class CryptoManager {
     const encrypted = await crypto.subtle.encrypt(
       {
         name: 'AES-GCM',
-        iv: iv
+        iv: iv,
+        additionalData: additionalData
       },
       sharedKey,
       data
@@ -186,7 +188,7 @@ export class CryptoManager {
    * @param {Uint8Array} iv - Initialization vector
    * @returns {Promise<ArrayBuffer>}
    */
-  async decrypt(peerId, encryptedData, iv) {
+  async decrypt(peerId, encryptedData, iv, additionalData) {
     const sharedKey = this.sharedSecrets.get(peerId);
     if (!sharedKey) {
       throw new Error(`No shared key for peer: ${peerId}`);
@@ -195,7 +197,8 @@ export class CryptoManager {
     const decrypted = await crypto.subtle.decrypt(
       {
         name: 'AES-GCM',
-        iv: iv
+        iv: iv,
+        additionalData: additionalData
       },
       sharedKey,
       encryptedData
@@ -212,7 +215,7 @@ export class CryptoManager {
    * @param {ArrayBuffer} chunk - File chunk data
    * @returns {Promise<ArrayBuffer>} Encrypted chunk with IVs prepended
    */
-  async encryptChunk(peerId, chunk) {
+  async encryptChunk(peerId, chunk, aad) {
     let data = chunk;
     let roomIv = null;
 
@@ -223,8 +226,8 @@ export class CryptoManager {
       roomIv = roomEncrypted.iv;
     }
 
-    // Layer 2: Peer-to-peer encryption
-    const { encrypted, iv: peerIv } = await this.encrypt(peerId, data);
+    // Layer 2: Peer-to-peer encryption（AAD 绑定分块元数据，防换序/替换）
+    const { encrypted, iv: peerIv } = await this.encrypt(peerId, data, aad);
 
     // Format: [room_iv_length (1 byte)][room_iv (0 or 12 bytes)][peer_iv (12 bytes)][encrypted_data]
     const roomIvLength = roomIv ? roomIv.length : 0;
@@ -267,15 +270,25 @@ export class CryptoManager {
    * @param {ArrayBuffer} data - Data with IVs prepended
    * @returns {Promise<ArrayBuffer>} Decrypted chunk
    */
-  async decryptChunk(peerId, data) {
+  async decryptChunk(peerId, data, aad) {
     const dataArray = new Uint8Array(data);
 
-    // Parse format: [room_iv_length][room_iv][peer_iv][encrypted_data]
-    const roomIvLength = dataArray[0];
-    let offset = 1;
+    // Parse format: [room_iv_length (1 byte)][room_iv (0 or 12 bytes)][peer_iv (12 bytes)][encrypted_data (含 GCM tag)]
+    if (dataArray.length < 1 + 12 + 16) {
+      throw new Error('Invalid chunk frame');
+    }
 
+    const roomIvLength = dataArray[0];
+    if (roomIvLength !== 0 && roomIvLength !== 12) {
+      throw new Error('Invalid room IV length');
+    }
+
+    let offset = 1;
     let roomIv = null;
     if (roomIvLength > 0) {
+      if (1 + roomIvLength + 12 + 16 > dataArray.length) {
+        throw new Error('Invalid chunk frame');
+      }
       roomIv = dataArray.slice(offset, offset + roomIvLength);
       offset += roomIvLength;
     }
@@ -284,12 +297,25 @@ export class CryptoManager {
     offset += 12;
 
     const encrypted = dataArray.slice(offset);
+    if (encrypted.length < 16) {
+      throw new Error('Invalid chunk frame');
+    }
 
-    // Layer 1: Peer-to-peer decryption
-    let decrypted = await this.decrypt(peerId, encrypted.buffer, peerIv);
+    // 加密降级防护：密码房间必须带 room 层，非密码房间不得出现 room 层。
+    // 否则信令中间人可注入仅 ECDH 层的数据绕过房间加密。
+    const hasRoomKey = this.hasRoomPassword();
+    if (hasRoomKey && roomIvLength !== 12) {
+      throw new Error('Missing room encryption layer');
+    }
+    if (!hasRoomKey && roomIvLength !== 0) {
+      throw new Error('Unexpected room encryption layer');
+    }
+
+    // Layer 1: Peer-to-peer decryption（AAD 绑定，防换序/替换）
+    let decrypted = await this.decrypt(peerId, encrypted.buffer, peerIv, aad);
 
     // Layer 2: Room-level decryption (if password is set)
-    if (this.hasRoomPassword() && roomIv) {
+    if (hasRoomKey && roomIv) {
       decrypted = await this.decryptWithRoomKey(decrypted, roomIv);
     }
 

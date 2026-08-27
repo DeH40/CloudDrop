@@ -84,6 +84,10 @@ export const ERROR_CODES = {
   TRANSFER_FAILED: 'TRANSFER_FAILED',
 };
 
+// 接收端安全上限：单文件最大 10GB，分块数上限与其对应
+// （file-start 严格校验，防伪造 huge totalChunks 造成遍历/内存 DoS）
+export const MAX_FILE_SIZE = 10 * 1024 * 1024 * 1024;
+
 // =============================================================================
 // File Transfer Configuration
 // =============================================================================
