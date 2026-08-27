@@ -44,7 +44,6 @@ export const WEBRTC = {
                                     // srflx/prflx evidence exists (slow but promising P2P)
   FAST_FALLBACK_TIMEOUT: 5000,      // 5 seconds fast fallback - fired when there is no
                                     // real NAT traversal evidence (STUN blocked, etc.)
-  CANDIDATE_GATHERING_TIMEOUT: 3000, // 3 seconds to gather initial candidates
   SLOW_CONNECTION_THRESHOLD: 3000,  // Show "slow connection" hint after 3 seconds
   DISCONNECTED_TIMEOUT: 3000,       // 3 seconds before switching to relay
 

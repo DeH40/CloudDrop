@@ -19,7 +19,6 @@ const {
   CHUNK_SIZE,
   CONNECTION_TIMEOUT,
   FAST_FALLBACK_TIMEOUT,
-  CANDIDATE_GATHERING_TIMEOUT,
   SLOW_CONNECTION_THRESHOLD,
   ICE_RESTART_DELAY,
   MAX_ICE_RESTARTS,
@@ -1301,18 +1300,6 @@ export class WebRTCManager {
     } finally {
       this.activeTransfers.delete(fileId);
     }
-  }
-
-  // Send file via WebSocket relay (legacy - now wrapped by sendFile)
-  async sendFileViaRelay(peerId, file) {
-    const fileId = crypto.randomUUID();
-    const accepted = await this._requestFileTransfer(peerId, file, fileId, true);
-
-    if (!accepted) {
-      throw new Error('对方拒绝了文件接收');
-    }
-
-    return this._sendFileDataViaRelay(peerId, file, fileId);
   }
 
   /**

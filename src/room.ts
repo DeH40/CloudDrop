@@ -16,16 +16,8 @@ export interface Env {
   ROOM: DurableObjectNamespace;
 }
 
-interface Peer {
-  id: string;
-  name: string;
-  deviceType: 'desktop' | 'mobile' | 'tablet';
-  browserInfo?: string;
-  webSocket: WebSocket;
-}
-
 interface SignalingMessage {
-  type: 'join' | 'leave' | 'offer' | 'answer' | 'ice-candidate' | 'peers' | 'text' | 'peer-joined' | 'peer-left' | 'relay-data' | 'name-changed' | 'key-exchange' | 'file-request' | 'file-response' | 'file-cancel' | 'auth' | 'auth-success' | 'challenge';
+  type: 'join' | 'offer' | 'answer' | 'ice-candidate' | 'peer-joined' | 'peer-left' | 'relay-data' | 'name-changed' | 'key-exchange' | 'file-request' | 'file-response' | 'file-cancel' | 'auth' | 'auth-success' | 'challenge';
   from?: string;
   to?: string;
   data?: unknown;
@@ -70,7 +62,6 @@ export class Room {
   constructor(state: DurableObjectState, _env: Env) {
     this.state = state;
     this.passwordHash = null;
-    this.passwordAttempts = { count: 0, lastReset: Date.now() }; // Keep for TS compatibility but unused logic
 
     // Load password hash from storage on initialization
     this.state.blockConcurrencyWhile(async () => {
@@ -347,9 +338,6 @@ export class Room {
         case 'ice-candidate':
           await this.handleSignaling(ws, msg);
           break;
-        case 'text':
-          await this.handleText(ws, msg);
-          break;
         case 'relay-data':
           await this.handleRelayData(ws, msg);
           break;
@@ -433,13 +421,6 @@ export class Room {
     } catch (e) {
       // Connection may be closing - ignore
     }
-  }
-
-  /**
-   * Check password lockout status (Legacy/Unused)
-   */
-  private checkPasswordLockout(): boolean {
-    return false;
   }
 
   /**
@@ -667,32 +648,6 @@ export class Room {
         console.error(`[Room] Failed to send signaling to ${msg.to}:`, e);
       }
     }
-  }
-
-  /**
-   * Handle text messages between peers
-   */
-  private async handleText(ws: WebSocket, msg: SignalingMessage): Promise<void> {
-    if (!msg.to) return;
-
-    const fromPeerId = this.getPeerIdFromWs(ws);
-    if (!fromPeerId) return;
-
-    // Validate and sanitize text content
-    let textData = msg.data;
-    if (typeof textData === 'string') {
-        // No explicit length limit for text messages to allow large pastes/code
-        // Basic DoS protection is handled by message size limit (50KB) in webSocketMessage
-        textData = textData; 
-    } else if (typeof textData === 'object' && textData !== null) {
-        // If it's a JSON object (like image message), we relying on message size limit
-    }
-
-    this.sendToPeer(msg.to, {
-      type: 'text',
-      from: fromPeerId,
-      data: textData,
-    });
   }
 
   /**

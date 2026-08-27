@@ -23,11 +23,6 @@ export default {
       return handleWebSocket(request, env);
     }
 
-    // Handle API endpoints
-    if (url.pathname === '/api/room-id') {
-      return handleRoomId(request);
-    }
-
     // Handle room password APIs
     if (url.pathname === '/api/room/set-password') {
       return handleSetRoomPassword(request, env);
@@ -145,21 +140,6 @@ async function handleIceServers(env: Env): Promise<Response> {
 
   // Return default STUN-only config
   return new Response(JSON.stringify({ iceServers: defaultIceServers }), {
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
-
-/**
- * Return the room ID for the current client
- */
-async function handleRoomId(request: Request): Promise<Response> {
-  const clientIP = request.headers.get('CF-Connecting-IP') || 
-                   request.headers.get('X-Forwarded-For')?.split(',')[0] || 
-                   'default';
-
-  const roomId = await generateRoomId(clientIP);
-
-  return new Response(JSON.stringify({ roomId }), {
     headers: { 'Content-Type': 'application/json' },
   });
 }
