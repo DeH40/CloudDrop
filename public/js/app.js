@@ -58,6 +58,11 @@ class CloudDrop {
     this.roomPassword = null; // Room password (plaintext, only in memory)
     this.roomPasswordHash = null; // Password hash for server verification
     this.isSecureRoom = false; // Whether current room is password-protected
+
+    // Reconnect state (exponential backoff, paused while page hidden)
+    this.reconnectAttempts = 0;
+    this.reconnectTimer = null;
+    this.reconnectPending = false;
   }
 
   /**
@@ -746,6 +751,43 @@ class CloudDrop {
     this.connectWebSocket();
   }
 
+  /**
+   * 指数退避重连：3s 起步、30s 封顶、随机抖动；页面隐藏时暂停，
+   * 恢复可见后立即重连（handleVisibilityChange）
+   */
+  scheduleReconnect() {
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+
+    const delay = Math.min(3000 * Math.pow(2, this.reconnectAttempts), 30000) + Math.random() * 1000;
+    this.reconnectAttempts++;
+
+    if (document.hidden) {
+      // 隐藏时暂停，恢复可见后再重连
+      this.reconnectPending = true;
+      return;
+    }
+
+    this.reconnectPending = false;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.connectWebSocket();
+    }, delay);
+  }
+
+  /**
+   * 页面恢复可见：若有挂起的重连，立即执行
+   */
+  handleVisibilityChange() {
+    if (document.hidden || !this.reconnectPending) return;
+    this.reconnectPending = false;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.connectWebSocket();
+    }, 200);
+  }
+
   connectWebSocket() {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     // If roomCode is set, use it; otherwise let server assign based on IP
@@ -762,6 +804,14 @@ class CloudDrop {
 
     this.ws.onopen = () => {
       ui.updateConnectionStatus('connected');
+
+      // 连接成功，重置重连退避计数
+      this.reconnectAttempts = 0;
+      this.reconnectPending = false;
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+      }
 
       // Clear existing peers on reconnect to avoid duplicates
       this.peers.clear();
@@ -856,7 +906,7 @@ class CloudDrop {
       }
 
       ui.updateConnectionStatus('disconnected');
-      setTimeout(() => this.connectWebSocket(), 3000);
+      this.scheduleReconnect();
     };
 
     this.ws.onerror = (event) => {
@@ -1900,6 +1950,9 @@ class CloudDrop {
   setupEventListeners() {
     const app = document.getElementById('app');
     let dragCounter = 0;
+
+    // 页面恢复可见时重连（配合 scheduleReconnect 的退避暂停）
+    document.addEventListener('visibilitychange', () => this.handleVisibilityChange());
 
     app.addEventListener('dragenter', (e) => {
       e.preventDefault();
