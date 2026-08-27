@@ -5,22 +5,58 @@
  */
 import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
+import WebSocket from 'ws';
 
 const PORT = 8798;
 const BASE = `http://localhost:${PORT}`;
 
 function waitWsMessage(ws, type, timeout = 8000) {
   return new Promise((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error(`timeout waiting ${type}`)), timeout);
-    const h = (e) => {
-      const m = JSON.parse(e.data);
-      if (m.type === type) {
-        clearTimeout(t);
-        ws.removeEventListener('message', h);
-        resolve(m);
+    const cleanup = () => {
+      clearTimeout(timer);
+      ws.removeEventListener('message', handleMessage);
+    };
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error(`timeout waiting ${type}`));
+    }, timeout);
+    const handleMessage = (event) => {
+      try {
+        const message = JSON.parse(String(event.data));
+        if (message.type === type) {
+          cleanup();
+          resolve(message);
+        }
+      } catch (error) {
+        cleanup();
+        reject(error);
       }
     };
-    ws.addEventListener('message', h);
+    ws.addEventListener('message', handleMessage);
+  });
+}
+
+function waitWsOpen(ws, timeout = 8000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error('timeout opening WebSocket'));
+    }, timeout);
+    const cleanup = () => {
+      clearTimeout(timer);
+      ws.removeEventListener('open', handleOpen);
+      ws.removeEventListener('error', handleError);
+    };
+    const handleOpen = () => {
+      cleanup();
+      resolve();
+    };
+    const handleError = (error) => {
+      cleanup();
+      reject(error);
+    };
+    ws.addEventListener('open', handleOpen);
+    ws.addEventListener('error', handleError);
   });
 }
 
@@ -46,6 +82,9 @@ let wranglerOutput = '';
 wrangler.stdout.on('data', (d) => { wranglerOutput += d.toString(); });
 wrangler.stderr.on('data', (d) => { wranglerOutput += d.toString(); });
 
+let exitCode = 0;
+let ws;
+
 try {
   await waitForServer();
 
@@ -66,10 +105,11 @@ try {
 
   // 3. WebSocket join
   const room = 'SMOKE1';
-  const ws = new WebSocket(`ws://localhost:${PORT}/ws?room=${room}`);
-  await new Promise((r, j) => { ws.onopen = r; ws.onerror = j; });
+  ws = new WebSocket(`ws://localhost:${PORT}/ws?room=${room}`);
+  await waitWsOpen(ws);
+  const joinedPromise = waitWsMessage(ws, 'joined');
   ws.send(JSON.stringify({ type: 'join', data: { name: 'smoke', deviceType: 'desktop', deviceKey: 'SMK' } }));
-  const joined = await waitWsMessage(ws, 'joined');
+  const joined = await joinedPromise;
   console.log('WebSocket joined:', joined.roomCode === room);
   ws.close();
 
@@ -81,17 +121,16 @@ try {
   ];
 
   if (failed.length) {
-    console.error('SMOKE FAIL:', failed.join('; '));
-    console.error(wranglerOutput.slice(-2000));
-    process.exit(1);
+    throw new Error(failed.join('; '));
   }
   console.log('SMOKE PASS');
-  process.exit(0);
 } catch (e) {
   console.error('SMOKE FAIL:', e.message);
   console.error(wranglerOutput.slice(-2000));
-  process.exit(1);
+  exitCode = 1;
 } finally {
+  ws?.terminate();
   try { process.kill(-wrangler.pid, 'SIGTERM'); } catch (e) { /* already gone */ }
-  setTimeout(() => process.exit(0), 500).unref();
 }
+
+process.exitCode = exitCode;

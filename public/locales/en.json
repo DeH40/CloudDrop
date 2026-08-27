@@ -343,7 +343,7 @@
   },
   "verify": {
     "title": "Full Device Verification",
-    "hint": "Open the same device's verification panel on the other device and confirm the information matches exactly.",
+    "hint": "Open the same device's verification panel on the other device and confirm the information matches exactly. If the two devices use different languages the safety words will differ - scan the QR code to compare the full fingerprint instead.",
     "words": "Safety words (read aloud)",
     "fingerprint": "Full fingerprint (scan)",
     "warning": "Confirm they match, then pin this device's public key. If the key changes later, a red warning will be shown and trust will be revoked.",

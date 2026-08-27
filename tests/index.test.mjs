@@ -53,11 +53,18 @@ test('SAS 快速码与完整验证：对称一致且格式正确', async () => {
   const quick = await a.computeSafetyCode('peer-test', 'PEERDEVKEY');
   assert.match(quick, /^[0-9A-F]{8}$/);
 
-  // 完整验证：66 bit 中文词 + 完整 64 hex 指纹（ECDH + 持久身份双绑定）
+  // 完整验证：完整 64 hex 指纹（ECDH + 持久身份双绑定）
   const full = await a.computeFullVerification('peer-test', 'PEERDEVKEY');
   assert.equal(full.quick, quick);
   assert.match(full.fingerprint, /^[0-9A-F]{64}$/);
-  assert.equal(full.words.length, 6);
+
+  // 安全词：6 个常用词（多语言词表，动态加载）
+  const words = await a.computeSafetyWords('peer-test', 'PEERDEVKEY', 'zh');
+  assert.equal(words.length, 6);
+  const { SAS_WORDS } = await import('../public/js/sasWords.js');
+  for (const w of words) assert.ok(SAS_WORDS.zh.includes(w));
+  // 中文词必须是多字词（非 BIP39 单字）
+  for (const w of words) assert.ok(w.length >= 2, `单字词: ${w}`);
 
   // 对称性：以 B 视角计算（ECDH 排序 + 身份排序后应一致）
   const pubA = await a.exportPublicKey();
@@ -77,20 +84,27 @@ test('SAS 快速码与完整验证：对称一致且格式正确', async () => {
   a.removePeer('peer-test');
 });
 
-test('安全词推导：确定性且索引在词表范围内', async () => {
+test('安全词推导：多语言、确定性、词表范围', async () => {
   const { SAS_WORDS, wordsFromDigest } = await import('../public/js/sasWords.js');
-  assert.equal(SAS_WORDS.length, 2048);
-  assert.equal(new Set(SAS_WORDS).size, 2048);
+  assert.equal(Object.keys(SAS_WORDS).length, 8);
+  for (const lang of Object.keys(SAS_WORDS)) {
+    assert.equal(SAS_WORDS[lang].length, 2048, lang);
+    assert.equal(new Set(SAS_WORDS[lang]).size, 2048, lang);
+  }
 
   const digest = new Uint8Array(32);
-  digest[0] = 0xab; digest[1] = 0xcd; digest[2] = 0xef; digest[3] = 0x12;
-  const w1 = wordsFromDigest(digest, 6);
-  const w2 = wordsFromDigest(digest, 6);
+  for (let i = 0; i < 32; i++) digest[i] = (i * 37 + 11) & 0xff;
+  const w1 = wordsFromDigest(digest, 6, 'zh');
+  const w2 = wordsFromDigest(digest, 6, 'zh');
   assert.deepEqual(w1, w2); // 确定性
   assert.equal(w1.length, 6);
-  for (const w of w1) {
-    assert.ok(SAS_WORDS.includes(w));
-  }
+  for (const w of w1) assert.ok(SAS_WORDS.zh.includes(w));
+  // 回退链：ar → en
+  const ar = wordsFromDigest(digest, 6, 'ar');
+  assert.deepEqual(ar, wordsFromDigest(digest, 6, 'en'));
+  // zh-HK 用简中词表（多字词）
+  const zhHK = wordsFromDigest(digest, 6, 'zh-HK');
+  assert.deepEqual(zhHK, w1);
 });
 
 test('base64 往返一致（分块实现）', () => {

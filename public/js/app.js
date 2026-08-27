@@ -1417,8 +1417,11 @@ class CloudDrop {
       return;
     }
 
+    // 安全词按界面语言取常用词表（动态加载）；无词表的语言回退英文
+    const words = await cryptoManager.computeSafetyWords(peerId, peer.deviceKey, i18n.getCurrentLocale());
+
     this._verifyPeerId = peerId;
-    ui.fillVerificationModal(peer.name, info);
+    ui.fillVerificationModal(peer.name, { ...info, words: words || [] });
     ui.showModal('peerVerifyModal');
   }
 

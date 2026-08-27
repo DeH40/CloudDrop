@@ -1,5 +1,4 @@
 import { debugLog } from './logger.js';
-import { wordsFromDigest } from './sasWords.js';
 
 /**
  * CloudDrop - End-to-End Encryption Module
@@ -148,16 +147,10 @@ export class CryptoManager {
   }
 
   /**
-   * 完整验证信息：双方 ECDH 公钥 + 双方持久设备公钥 排序后 SHA-256。
-   * 绑定持久身份：信令中间人即使保持 ECDH 一致，替换 deviceKey 也会导致
-   * 安全词/指纹/二维码不一致（用户确认后固定的就是参与哈希的设备身份）。
-   * - quick: 8 位快速码
-   * - words: 6 个 BIP39 中文词（66 bit），人工口头核对
-   * - fingerprint: 完整 64 位十六进制指纹（扫码/精确核对 + pin 信任）
-   * @param {string} peerId - ECDH 密钥对应的 peerId
-   * @param {string|null} peerDeviceKey - 对端持久设备公钥（join 携带）
+   * 验证摘要：双方 ECDH 公钥 + 双方持久设备公钥 排序后 SHA-256。
+   * 绑定持久身份：信令中间人即使保持 ECDH 一致，替换 deviceKey 也会破坏一致性。
    */
-  async computeFullVerification(peerId, peerDeviceKey = null) {
+  async _computeVerificationDigest(peerId, peerDeviceKey = null) {
     const peerKey = this.peerPublicKeys.get(peerId);
     if (!peerKey) return null;
 
@@ -171,16 +164,42 @@ export class CryptoManager {
       'SHA-256',
       new TextEncoder().encode(ecdhParts.join('|') + '||' + identityParts.join('|'))
     );
-    const bytes = new Uint8Array(hashBuffer);
+    return new Uint8Array(hashBuffer);
+  }
+
+  /**
+   * 完整验证信息（快速码 + 完整指纹，不含安全词——词表按需动态加载）
+   * - quick: 8 位快速码
+   * - fingerprint: 完整 64 位十六进制指纹（扫码/精确核对 + pin 信任）
+   * @param {string} peerId - ECDH 密钥对应的 peerId
+   * @param {string|null} peerDeviceKey - 对端持久设备公钥（join 携带）
+   */
+  async computeFullVerification(peerId, peerDeviceKey = null) {
+    const bytes = await this._computeVerificationDigest(peerId, peerDeviceKey);
+    if (!bytes) return null;
 
     const fingerprint = Array.from(bytes)
       .map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
 
     return {
       quick: fingerprint.slice(0, 8),
-      words: wordsFromDigest(bytes, 6),
       fingerprint
     };
+  }
+
+  /**
+   * 安全词（6 词 = 66 bit，多语言常用词，人工口头核对）。
+   * 词表约 58KB(gzip)，动态加载不拖慢首屏。
+   * @param {string} peerId - ECDH 密钥对应的 peerId
+   * @param {string|null} peerDeviceKey - 对端持久设备公钥
+   * @param {string} locale - 界面语言（无对应词表回退英文）
+   */
+  async computeSafetyWords(peerId, peerDeviceKey = null, locale = 'en') {
+    const bytes = await this._computeVerificationDigest(peerId, peerDeviceKey);
+    if (!bytes) return null;
+
+    const { wordsFromDigest } = await import('./sasWords.js');
+    return wordsFromDigest(bytes, 6, locale);
   }
 
   /**
