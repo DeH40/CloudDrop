@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "test": "echo \"No tests yet\""
+    "test": "node --test tests/index.test.mjs"
   },
   "keywords": [
     "cloudflare",
