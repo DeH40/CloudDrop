@@ -1489,6 +1489,11 @@ class CloudDrop {
       return;
     }
 
+    // 安全码点击：不弹文件选择器，交给网格代理打开完整验证弹窗
+    if (e && e.target.closest('[data-role="safety-code"]')) {
+      return;
+    }
+
     // Default: select file
     this.selectedPeer = peer;
     const input = document.createElement('input');
