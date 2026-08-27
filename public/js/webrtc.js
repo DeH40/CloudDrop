@@ -311,6 +311,10 @@ export class WebRTCManager {
 
     this.relayMode = new Map(); // peerId -> boolean
 
+    // Event-driven waiters (替代 100ms 轮询)
+    this.channelWaiters = new Map(); // peerId -> { promise, resolve, reject, timer }
+    this.keyWaiters = new Map(); // peerId -> { promise, resolve, reject, timer }
+
     // ICE candidate type tracking for smart fallback
     this.candidateTypes = new Map(); // peerId -> Set<'host'|'srflx'|'relay'>
     this.connectionQuality = new Map(); // peerId -> { p2pPossible: boolean, hasRelay: boolean }
@@ -869,6 +873,8 @@ export class WebRTCManager {
 
     channel.onopen = () => {
       console.log(`[WebRTC] DataChannel opened with ${peerId}`);
+      // Wake up any waitForChannel() waiters
+      this._resolveChannelWaiters(peerId);
       // Reset relay mode when direct channel opens
       this.relayMode.delete(peerId);
       // Stop any background P2P retry since we're now connected
@@ -974,6 +980,7 @@ export class WebRTCManager {
 
       if (data.publicKey) {
         await cryptoManager.importPeerPublicKey(peerId, data.publicKey);
+        this._resolveKeyWaiters(peerId);
       }
 
       const publicKey = await cryptoManager.exportPublicKey();
@@ -1017,6 +1024,7 @@ export class WebRTCManager {
 
       if (data.publicKey) {
         await cryptoManager.importPeerPublicKey(peerId, data.publicKey);
+        this._resolveKeyWaiters(peerId);
         console.log(`[WebRTC] Imported public key from ${peerId}`);
       }
     } catch (e) {
@@ -1922,6 +1930,7 @@ export class WebRTCManager {
   async handleKeyExchange(peerId, data) {
     if (data.publicKey) {
       await cryptoManager.importPeerPublicKey(peerId, data.publicKey);
+      this._resolveKeyWaiters(peerId);
       console.log(`[WebRTC] Imported public key from ${peerId} via key-exchange`);
 
       // Send our public key back if they don't have it
@@ -1939,56 +1948,87 @@ export class WebRTCManager {
     }
   }
 
-  // Wait for channel to open with fail-fast on ICE failure
+  /**
+   * Event-driven wait for the data channel to open (replaces 100ms polling)
+   */
   waitForChannel(peerId, timeout = CONNECTION_TIMEOUT) {
-    return new Promise((resolve, reject) => {
-      const start = Date.now();
-      const pc = this.connections.get(peerId);
+    const ch = this.dataChannels.get(peerId);
+    if (ch && ch.readyState === 'open') return Promise.resolve();
 
-      const check = () => {
-        const ch = this.dataChannels.get(peerId);
-        if (ch && ch.readyState === 'open') {
-          resolve();
-          return;
-        }
+    // Fail fast if the connection is already dead
+    const pc = this.connections.get(peerId);
+    if (pc && (pc.connectionState === 'failed' || pc.connectionState === 'closed')) {
+      return Promise.reject(new Error('Connection failed'));
+    }
 
-        // Fail fast if ICE failed
-        if (pc) {
-          if (pc.iceConnectionState === 'failed' && !this.iceRestartCounts.get(peerId)) {
-            // Only reject if not restarting usually, but here we want speed
-            // If failed and no channel, likely dead.
-            // But we have auto-restart logic.
-            // We should wait if restarting? 
-            // If we've exhausted restarts, it will be closed.
-            if (pc.iceConnectionState === 'failed' && (this.iceRestartCounts.get(peerId) || 0) >= MAX_ICE_RESTARTS) {
-              reject(new Error('ICE connection failed'));
-              return;
-            }
-          }
-          if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-            reject(new Error('Connection failed'));
-            return;
-          }
-        }
-
-        if (Date.now() - start > timeout) reject(new Error('Channel timeout'));
-        else setTimeout(check, 100);
-      };
-      check();
-    });
+    return this._waitForEvent('channelWaiters', peerId, timeout, 'Channel timeout');
   }
 
-  // Wait for encryption key
+  /**
+   * Event-driven wait for the ECDH shared key (replaces 100ms polling)
+   */
   waitForEncryptionKey(peerId, timeout = CONNECTION_TIMEOUT) {
-    return new Promise((resolve, reject) => {
-      const start = Date.now();
-      const check = () => {
-        if (cryptoManager.hasSharedSecret(peerId)) resolve();
-        else if (Date.now() - start > timeout) reject(new Error('Encryption key timeout'));
-        else setTimeout(check, 100);
-      };
-      check();
+    if (cryptoManager.hasSharedSecret(peerId)) return Promise.resolve();
+    return this._waitForEvent('keyWaiters', peerId, timeout, 'Encryption key timeout');
+  }
+
+  /**
+   * 通用事件等待器：注册 resolve/reject 到 waiter map，超时自动清理
+   */
+  _waitForEvent(mapKey, peerId, timeout, timeoutError) {
+    let waiter = this[mapKey].get(peerId);
+    if (waiter) return waiter.promise;
+
+    let resolveFn, rejectFn;
+    const promise = new Promise((resolve, reject) => {
+      resolveFn = resolve;
+      rejectFn = reject;
     });
+    const timer = setTimeout(() => {
+      this[mapKey].delete(peerId);
+      rejectFn(new Error(timeoutError));
+    }, timeout);
+    waiter = { promise, resolve: resolveFn, reject: rejectFn, timer };
+    this[mapKey].set(peerId, waiter);
+    return promise;
+  }
+
+  /**
+   * Wake channel waiters (data channel opened)
+   */
+  _resolveChannelWaiters(peerId) {
+    const waiter = this.channelWaiters.get(peerId);
+    if (waiter) {
+      clearTimeout(waiter.timer);
+      this.channelWaiters.delete(peerId);
+      waiter.resolve();
+    }
+  }
+
+  /**
+   * Wake key waiters (ECDH shared secret ready)
+   */
+  _resolveKeyWaiters(peerId) {
+    const waiter = this.keyWaiters.get(peerId);
+    if (waiter) {
+      clearTimeout(waiter.timer);
+      this.keyWaiters.delete(peerId);
+      waiter.resolve();
+    }
+  }
+
+  /**
+   * Reject all waiters for a peer (connection closed/failed)
+   */
+  _rejectPeerWaiters(peerId, error) {
+    for (const mapKey of ['channelWaiters', 'keyWaiters']) {
+      const waiter = this[mapKey].get(peerId);
+      if (waiter) {
+        clearTimeout(waiter.timer);
+        this[mapKey].delete(peerId);
+        waiter.reject(error);
+      }
+    }
   }
 
   /**
@@ -2341,6 +2381,9 @@ export class WebRTCManager {
   // Close connection and cleanup all state
   closeConnection(peerId, preserveRelay = false) {
     const wasRelay = this.relayMode.get(peerId);
+
+    // Reject pending waiters (connection is going away)
+    this._rejectPeerWaiters(peerId, new Error('Connection closed'));
 
     // Clear timers
     if (this.disconnectedTimers.has(peerId)) {
