@@ -57,6 +57,8 @@ export class Room {
   private static readonly RELAY_BYTES_PER_SEC = 2 * 1024 * 1024; // 2MB/s data budget for relay/ICE
   private static readonly RELAY_BURST_BYTES = 4 * 1024 * 1024; // 4MB burst allowance
   private static readonly MAX_PASSWORD_ATTEMPTS = 5; // 5 attempts per connection
+  private static readonly MAX_ROOM_AUTH_FAILURES = 20; // Global failures per room within window
+  private static readonly AUTH_FAILURE_WINDOW = 15 * 60 * 1000; // 15 minutes
   private static readonly SECURE_ROOM_TTL = 600000; // 10 minutes
 
   constructor(state: DurableObjectState, _env: Env) {
@@ -430,11 +432,21 @@ export class Room {
     // Check per-connection attempts
     const attempts = currentAttachment?.authAttempts || 0;
     if (attempts >= Room.MAX_PASSWORD_ATTEMPTS) {
-      ws.send(JSON.stringify({
-        type: 'error',
-        error: 'RATE_LIMIT_EXCEEDED',
-        message: '尝试次数过多，请重新连接'
-      }));
+      this.sendErrorFrame(ws, 'RATE_LIMIT_EXCEEDED', '尝试次数过多，请重新连接');
+      ws.close(4002, 'RATE_LIMIT_EXCEEDED');
+      return;
+    }
+
+    // Global room-level brute-force protection (survives reconnects - the
+    // per-connection counter alone is trivially bypassed by reconnecting)
+    const now = Date.now();
+    const storedFailures = await this.state.storage.get<{ count: number; windowStart: number }>('authFailures');
+    const failures = storedFailures && (now - storedFailures.windowStart) < Room.AUTH_FAILURE_WINDOW
+      ? storedFailures
+      : { count: 0, windowStart: now };
+
+    if (failures.count >= Room.MAX_ROOM_AUTH_FAILURES) {
+      this.sendErrorFrame(ws, 'RATE_LIMIT_EXCEEDED', '尝试次数过多，请稍后再试');
       ws.close(4002, 'RATE_LIMIT_EXCEEDED');
       return;
     }
@@ -457,6 +469,9 @@ export class Room {
     if (authData && authData.response === expectedResponse) {
       // Authentication successful
       
+      // Reset global failure counter
+      await this.state.storage.delete('authFailures');
+
       // Clear challenge and set authenticated
       ws.serializeAttachment({
         ...currentAttachment,
@@ -475,6 +490,11 @@ export class Room {
       // Authentication failed - increment attempts
       const newAttempts = attempts + 1;
       const newNonce = crypto.randomUUID();
+
+      // Increment global room-level failure counter
+      failures.count += 1;
+      failures.windowStart = now;
+      await this.state.storage.put('authFailures', failures);
 
       ws.serializeAttachment({
         ...currentAttachment,

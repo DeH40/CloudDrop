@@ -14,6 +14,28 @@ export interface Env {
   TURN_KEY_API_TOKEN?: string;
 }
 
+// =============================================================================
+// Per-IP rate limiting for the set-password endpoint (module scope)
+// Prevents room squatting/locking abuse. Resets when the isolate is evicted,
+// which is an acceptable trade-off for this protection level.
+// =============================================================================
+const setPasswordAttempts = new Map<string, { count: number; resetAt: number }>();
+const SET_PASSWORD_MAX_PER_IP = 5;            // 5 attempts
+const SET_PASSWORD_WINDOW_MS = 60 * 60 * 1000; // per hour, per IP
+
+function isSetPasswordRateLimited(ip: string): boolean {
+  const now = Date.now();
+  let entry = setPasswordAttempts.get(ip);
+
+  if (!entry || now > entry.resetAt) {
+    setPasswordAttempts.set(ip, { count: 1, resetAt: now + SET_PASSWORD_WINDOW_MS });
+    return false;
+  }
+
+  entry.count++;
+  return entry.count > SET_PASSWORD_MAX_PER_IP;
+}
+
 export default {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -219,6 +241,18 @@ async function handleSetRoomPassword(request: Request, env: Env): Promise<Respon
       error: 'Invalid room code format'
     }), {
       status: 400,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  // Rate limit by client IP to prevent room squatting/locking abuse
+  const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
+  if (isSetPasswordRateLimited(clientIP)) {
+    return new Response(JSON.stringify({
+      success: false,
+      error: 'Too many attempts, please try again later'
+    }), {
+      status: 429,
       headers: { 'Content-Type': 'application/json' }
     });
   }
