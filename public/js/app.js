@@ -735,7 +735,7 @@ class CloudDrop {
     // Clear peers
     this.peers.clear();
     ui.clearPeersGrid(document.getElementById('peersGrid'));
-    this.webrtc?.closeAll();
+    // 旧管理器由 connectWebSocket 内的 destroy() 完整清理
 
     // Update room code
     this.roomCode = newRoomCode;
@@ -913,6 +913,11 @@ class CloudDrop {
       console.error('[WebSocket] Error:', event);
       ui.updateConnectionStatus('disconnected');
     };
+
+    // 替换旧管理器前完整清理，避免旧定时器/回调泄漏到新实例
+    if (this.webrtc) {
+      this.webrtc.destroy();
+    }
 
     this.webrtc = new WebRTCManager({
       send: (msg) => this.ws.readyState === WebSocket.OPEN && this.ws.send(JSON.stringify(msg))

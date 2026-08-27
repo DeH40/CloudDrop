@@ -2356,4 +2356,34 @@ export class WebRTCManager {
   closeAll() {
     for (const peerId of this.connections.keys()) this.closeConnection(peerId);
   }
+
+  /**
+   * Full teardown: stop all timers, close all connections, detach callbacks.
+   * Called before replacing this manager (reconnect / room switch) so stale
+   * timers and in-flight promises can't leak into the new instance's UI.
+   */
+  destroy() {
+    // Stop pending timers
+    for (const timer of this.disconnectedTimers.values()) clearTimeout(timer);
+    for (const timer of this.p2pRetryTimers.values()) clearTimeout(timer);
+    this.disconnectedTimers.clear();
+    this.p2pRetryTimers.clear();
+    this.p2pRetryAttempts.clear();
+
+    // Close all connections and clean up state
+    this.closeAll();
+
+    // Detach callbacks so late async completions are ignored
+    this.onFileReceived = null;
+    this.onFileRequest = null;
+    this.onFileRequestResponse = null;
+    this.onTransferStart = null;
+    this.onProgress = null;
+    this.onTextReceived = null;
+    this.onConnectionStateChange = null;
+    this.onTransferCancelled = null;
+    this.onTransferFailed = null;
+
+    console.log('[WebRTC] Manager destroyed');
+  }
 }
