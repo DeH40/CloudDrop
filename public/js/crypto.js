@@ -400,13 +400,15 @@ export class CryptoManager {
   // ============================================
 
   /**
-   * Convert ArrayBuffer to Base64 string
+   * Convert ArrayBuffer to Base64 string (chunked for large payloads)
    */
   arrayBufferToBase64(buffer) {
     const bytes = new Uint8Array(buffer);
+    const CHUNK_SIZE = 8192; // 8KB per chunk to avoid call-stack issues
     let binary = '';
-    for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i]);
+    for (let i = 0; i < bytes.byteLength; i += CHUNK_SIZE) {
+      const chunk = bytes.subarray(i, Math.min(i + CHUNK_SIZE, bytes.byteLength));
+      binary += String.fromCharCode.apply(null, chunk);
     }
     return btoa(binary);
   }
