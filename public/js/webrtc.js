@@ -11,6 +11,7 @@
  */
 
 import { cryptoManager } from './crypto.js';
+import { chunkStore } from './chunkStore.js';
 import { WEBRTC, P2P_RETRY, RELAY, ERROR_CODES } from './config.js';
 import { i18n } from './i18n.js';
 
@@ -1206,6 +1207,7 @@ export class WebRTCManager {
     // Clean up incoming transfer state
     const incomingTransfer = this.incomingTransfers.get(peerId);
     if (incomingTransfer && incomingTransfer.fileId === fileId) {
+      if (incomingTransfer.useIdb) chunkStore.deleteFile(fileId).catch(() => {});
       this.incomingTransfers.delete(peerId);
     }
 
@@ -1244,6 +1246,10 @@ export class WebRTCManager {
     // Clean up incoming transfer state
     const incomingTransfer = this.incomingTransfers.get(peerId);
     if (incomingTransfer && incomingTransfer.fileId === fileId) {
+      // 清理落盘分块
+      if (incomingTransfer.useIdb) {
+        chunkStore.deleteFile(fileId).catch(() => {});
+      }
       this.incomingTransfers.delete(peerId);
     }
 
@@ -1550,6 +1556,21 @@ export class WebRTCManager {
     });
   }
 
+  /**
+   * 初始化接收存储：IndexedDB 可用则分块落盘（大文件不占内存），
+   * 否则回退到内存数组
+   */
+  async _initTransferStorage(transfer, fileId, totalChunks) {
+    transfer.useIdb = await chunkStore.isAvailable();
+    transfer.chunkCount = 0;
+    if (transfer.useIdb) {
+      transfer.chunks = null; // 不再驻留内存
+      console.log(`[WebRTC] 分块落盘已启用（IndexedDB）：${fileId}`);
+    } else {
+      transfer.chunks = [];
+    }
+  }
+
   // Handle incoming message
   async handleMessage(peerId, data) {
     if (typeof data === 'string') {
@@ -1562,18 +1583,21 @@ export class WebRTCManager {
         if (existingTransfer && existingTransfer.confirmed && existingTransfer.fileId === msg.fileId) {
           // Transfer was already confirmed, update with actual start time
           existingTransfer.startTime = Date.now();
+          await this._initTransferStorage(existingTransfer, msg.fileId, msg.totalChunks);
           // Register as active transfer for cancellation support
           this.activeTransfers.set(msg.fileId, { peerId, direction: 'receive', cancelled: false });
           console.log(`[WebRTC] Starting confirmed file transfer: ${msg.name}`);
         } else {
           // Legacy flow or direct P2P without confirmation
           // Initialize new transfer
-          this.incomingTransfers.set(peerId, {
+          const transfer = {
             fileId: msg.fileId, name: msg.name, size: msg.size,
             mimeType: msg.mimeType || 'application/octet-stream', // Save MIME type
             totalChunks: msg.totalChunks, chunks: [], received: 0, startTime: Date.now(),
             confirmed: true // Mark as confirmed since it's already starting
-          });
+          };
+          this.incomingTransfers.set(peerId, transfer);
+          await this._initTransferStorage(transfer, msg.fileId, msg.totalChunks);
           // Register as active transfer
           this.activeTransfers.set(msg.fileId, { peerId, direction: 'receive', cancelled: false });
           console.log(`[WebRTC] File transfer started (direct): ${msg.name}`);
@@ -1586,8 +1610,24 @@ export class WebRTCManager {
         if (transfer) {
           // Integrity check: never deliver an incomplete file
           const expectedChunks = transfer.totalChunks || 0;
-          const chunkCount = transfer.chunks.length;
-          if (chunkCount !== expectedChunks || transfer.received !== transfer.size) {
+          const chunkCount = transfer.useIdb ? transfer.chunkCount : (transfer.chunks ? transfer.chunks.length : 0);
+
+          let blob = null;
+          if (chunkCount === expectedChunks && transfer.received === transfer.size) {
+            if (transfer.useIdb) {
+              const stored = await chunkStore.getAllChunks(transfer.fileId);
+              if (stored.length === expectedChunks) {
+                blob = new Blob(stored, { type: transfer.mimeType || 'application/octet-stream' });
+              }
+            } else {
+              blob = new Blob(transfer.chunks, { type: transfer.mimeType || 'application/octet-stream' });
+            }
+          }
+
+          // 无论成败都清理落盘分块
+          if (transfer.useIdb) chunkStore.deleteFile(transfer.fileId).catch(() => {});
+
+          if (!blob) {
             console.error(`[WebRTC] P2P transfer incomplete: ${chunkCount}/${expectedChunks} chunks, ${transfer.received}/${transfer.size} bytes - discarding`);
             if (this.onTransferFailed) {
               this.onTransferFailed(peerId, transfer.fileId, transfer.name, 'incomplete');
@@ -1597,7 +1637,6 @@ export class WebRTCManager {
             return;
           }
 
-          const blob = new Blob(transfer.chunks, { type: transfer.mimeType || 'application/octet-stream' }); // Use MIME type
           if (this.onFileReceived) this.onFileReceived(peerId, transfer.name, blob);
           this.incomingTransfers.delete(peerId);
           this.activeTransfers.delete(transfer.fileId);
@@ -1621,7 +1660,15 @@ export class WebRTCManager {
       const transfer = this.incomingTransfers.get(peerId);
       if (transfer) {
         const decrypted = await cryptoManager.decryptChunk(peerId, data);
-        transfer.chunks.push(new Uint8Array(decrypted));
+        const bytes = new Uint8Array(decrypted);
+
+        if (transfer.useIdb) {
+          // 大文件：分块落盘，避免内存 OOM
+          await chunkStore.putChunk(transfer.fileId, transfer.chunkCount, bytes);
+          transfer.chunkCount++;
+        } else {
+          transfer.chunks.push(bytes);
+        }
         transfer.received += decrypted.byteLength;
 
         if (this.onProgress) {
@@ -1652,9 +1699,9 @@ export class WebRTCManager {
       const existingTransfer = this.incomingTransfers.get(peerId);
 
       if (existingTransfer && existingTransfer.confirmed && existingTransfer.fileId === data.fileId) {
-        // Transfer was already confirmed - RESET chunks array to avoid stale data!
+        // Transfer was already confirmed - RESET chunk state to avoid stale data!
         existingTransfer.startTime = Date.now();
-        existingTransfer.chunks = [];  // Critical: clear any residual chunks
+        await this._initTransferStorage(existingTransfer, data.fileId, data.totalChunks);
         existingTransfer.received = 0;
         existingTransfer.totalChunks = data.totalChunks;
         existingTransfer.receivedIndices = new Set(); // Track received chunk indices
@@ -1665,6 +1712,9 @@ export class WebRTCManager {
         // Clean up any stale transfer first
         if (existingTransfer) {
           console.log(`[WebRTC] Cleaning up stale transfer for peer ${peerId}`);
+          if (existingTransfer.useIdb && existingTransfer.fileId) {
+            chunkStore.deleteFile(existingTransfer.fileId).catch(() => {});
+          }
           this.incomingTransfers.delete(peerId);
           if (existingTransfer.fileId) {
             this.activeTransfers.delete(existingTransfer.fileId);
@@ -1672,16 +1722,18 @@ export class WebRTCManager {
         }
 
         // Initialize new transfer with fresh state
-        this.incomingTransfers.set(peerId, {
+        const transfer = {
           fileId: data.fileId, name: data.name, size: data.size,
           mimeType: data.mimeType || 'application/octet-stream',
           totalChunks: data.totalChunks,
-          chunks: [],           // Fresh empty array
+          chunks: [],           // Fresh empty array（useIdb 时置空）
           receivedIndices: new Set(), // Track received chunk indices
           received: 0,
           startTime: Date.now(),
           confirmed: true
-        });
+        };
+        this.incomingTransfers.set(peerId, transfer);
+        await this._initTransferStorage(transfer, data.fileId, data.totalChunks);
         // Register as active transfer
         this.activeTransfers.set(data.fileId, { peerId, direction: 'receive', cancelled: false });
         console.log(`[WebRTC] Relay file transfer started (direct): ${data.name}`);
@@ -1747,6 +1799,7 @@ export class WebRTCManager {
         // NEVER deliver an incomplete/corrupt file - fail the transfer instead
         if (receivedCount !== expectedCount || transfer.received !== transfer.size) {
           console.error(`[WebRTC] Transfer incomplete: expected ${expectedCount} chunks (${transfer.size} bytes), got ${receivedCount} chunks (${transfer.received} bytes) - discarding`);
+          if (transfer.useIdb) chunkStore.deleteFile(transfer.fileId).catch(() => {});
           if (this.onTransferFailed) {
             this.onTransferFailed(peerId, transfer.fileId, transfer.name, 'incomplete');
           }
@@ -1756,12 +1809,18 @@ export class WebRTCManager {
         }
 
         // Build blob from chunks in correct order
-        const orderedChunks = [];
-        for (let i = 0; i < expectedCount; i++) {
-          orderedChunks.push(transfer.chunks[i]);
+        let blob;
+        if (transfer.useIdb) {
+          const stored = await chunkStore.getAllChunks(transfer.fileId);
+          blob = new Blob(stored, { type: transfer.mimeType || 'application/octet-stream' });
+          chunkStore.deleteFile(transfer.fileId).catch(() => {});
+        } else {
+          const orderedChunks = [];
+          for (let i = 0; i < expectedCount; i++) {
+            orderedChunks.push(transfer.chunks[i]);
+          }
+          blob = new Blob(orderedChunks, { type: transfer.mimeType || 'application/octet-stream' });
         }
-
-        const blob = new Blob(orderedChunks, { type: transfer.mimeType || 'application/octet-stream' });
 
         console.log(`[WebRTC] Transfer complete: ${receivedCount}/${expectedCount} chunks, size: ${blob.size}`);
 
@@ -1787,7 +1846,7 @@ export class WebRTCManager {
     } else if (data.type === 'chunk') {
       const transfer = this.incomingTransfers.get(peerId);
       if (transfer && transfer.fileId === data.fileId) {
-        const chunkIndex = data.index !== undefined ? data.index : transfer.chunks.length;
+        const chunkIndex = data.index !== undefined ? data.index : (transfer.chunkCount || 0);
 
         // Skip duplicate chunks (from retransmission)
         if (transfer.receivedIndices && transfer.receivedIndices.has(chunkIndex)) {
@@ -1802,8 +1861,13 @@ export class WebRTCManager {
 
           const decrypted = await cryptoManager.decryptChunk(peerId, bytes.buffer);
 
-          // Place chunk in correct position
-          transfer.chunks[chunkIndex] = new Uint8Array(decrypted);
+          // Place chunk in correct position (IDB 落盘或内存数组)
+          if (transfer.useIdb) {
+            await chunkStore.putChunk(transfer.fileId, chunkIndex, new Uint8Array(decrypted));
+            transfer.chunkCount = Math.max(transfer.chunkCount || 0, chunkIndex + 1);
+          } else if (transfer.chunks) {
+            transfer.chunks[chunkIndex] = new Uint8Array(decrypted);
+          }
           transfer.received += decrypted.byteLength;
 
           // Mark as received
@@ -2445,6 +2509,15 @@ export class WebRTCManager {
 
     // Close all connections and clean up state
     this.closeAll();
+
+    // 清理未完成的接收传输及其落盘分块
+    for (const [peerId, transfer] of this.incomingTransfers.entries()) {
+      if (transfer.useIdb && transfer.fileId) {
+        chunkStore.deleteFile(transfer.fileId).catch(() => {});
+      }
+    }
+    this.incomingTransfers.clear();
+    this.activeTransfers.clear();
 
     // Detach callbacks so late async completions are ignored
     this.onFileReceived = null;
