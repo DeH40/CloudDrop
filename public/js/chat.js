@@ -231,33 +231,59 @@ export const ChatMixin = {
 
     // Check if it's an image message
     if (msg.messageType === 'image' && msg.imageData) {
-      msgEl.innerHTML = `
-        <div class="chat-bubble-wrapper">
-          <div class="chat-bubble chat-bubble-image">
-            <img src="${msg.imageData}" alt="${i18n.t('fileTypes.image')}" loading="lazy">
-          </div>
-          <button class="chat-copy-btn" title="${i18n.t('chat.copyImage')}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="9" y="9" width="13" height="13" rx="2"/>
-              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
-            </svg>
-          </button>
-        </div>
-        <div class="chat-time">${statusText}</div>
-      `;
+      // 防注入：仅接受 data:image/ 前缀的字符串，且通过 DOM 属性赋值，
+      // 绝不把对端数据拼进 innerHTML
+      const safeSrc = (typeof msg.imageData === 'string' &&
+        msg.imageData.startsWith('data:image/') &&
+        msg.imageData.length < 300000) ? msg.imageData : null;
 
-      // Add click handler for fullscreen view
-      const img = msgEl.querySelector('.chat-bubble-image img');
-      img.addEventListener('click', () => {
-        this.showImageFullscreen(msg.imageData);
-      });
+      if (safeSrc) {
+        const imgEl = document.createElement('img');
+        imgEl.src = safeSrc;
+        imgEl.alt = i18n.t('fileTypes.image');
+        imgEl.loading = 'lazy';
 
-      // Add copy button functionality for image
-      const copyBtn = msgEl.querySelector('.chat-copy-btn');
-      copyBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.copyImageToClipboard(msg.imageData, copyBtn);
-      });
+        const wrapper = document.createElement('div');
+        wrapper.className = 'chat-bubble-wrapper';
+
+        const bubble = document.createElement('div');
+        bubble.className = 'chat-bubble chat-bubble-image';
+        bubble.appendChild(imgEl);
+        wrapper.appendChild(bubble);
+        msgEl.appendChild(wrapper);
+
+        // Add click handler for fullscreen view
+        imgEl.addEventListener('click', () => {
+          this.showImageFullscreen(safeSrc);
+        });
+
+        // Copy button
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'chat-copy-btn';
+        copyBtn.title = i18n.t('chat.copyImage');
+        copyBtn.innerHTML = `
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2"/>
+            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+          </svg>
+        `;
+        copyBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.copyImageToClipboard(safeSrc, copyBtn);
+        });
+        msgEl.appendChild(copyBtn);
+
+        const time = document.createElement('div');
+        time.className = 'chat-time';
+        time.textContent = statusText;
+        msgEl.appendChild(time);
+      } else {
+        // 非法图片数据：渲染为提示文本
+        const bubble = document.createElement('div');
+        bubble.className = 'chat-bubble';
+        bubble.textContent = i18n.t('chat.invalidImage');
+        msgEl.appendChild(bubble);
+      }
     } else {
       // Text message
       msgEl.innerHTML = `

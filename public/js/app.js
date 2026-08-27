@@ -757,9 +757,11 @@ class CloudDrop {
       ui.clearPeersGrid(document.getElementById('peersGrid'));
       this.webrtc?.closeAll(); // Also close stale WebRTC connections
 
-      // If NOT secure room, send join immediately
-      // If secure room, we wait for 'challenge' message
-      if (!this.isSecureRoom || !this.roomPasswordHash) {
+      // 三种状态分离：
+      // - _setPasswordPending（创建流程）：先 join，再加入后经信令设密
+      // - isSecureRoom + roomPasswordHash（已加密房间）：等 challenge 走 auth
+      // - 其他：直接 join
+      if (!this.isSecureRoom || !this.roomPasswordHash || this._setPasswordPending) {
         this.sendJoinMessage();
       } else {
         // Secure room: waiting for challenge - add timeout fallback so we never
@@ -1085,13 +1087,17 @@ class CloudDrop {
           clearTimeout(this._secureJoinTimeout);
           this._secureJoinTimeout = null;
         }
-        // 创建加密房间流程：加入后通过房间内信令设置密码
+        // 创建加密房间流程：加入后稍等（服务端要求在场最短时间）再通过信令设密
         if (this._setPasswordPending && this.roomPasswordHash && this.ws) {
-          debugLog('[App] 已加入房间，发送 set-password');
-          this.ws.send(JSON.stringify({
-            type: 'set-password',
-            data: { passwordHash: this.roomPasswordHash }
-          }));
+          debugLog('[App] 已加入房间，延迟发送 set-password');
+          setTimeout(() => {
+            if (this._setPasswordPending && this.ws && this.ws.readyState === WebSocket.OPEN) {
+              this.ws.send(JSON.stringify({
+                type: 'set-password',
+                data: { passwordHash: this.roomPasswordHash }
+              }));
+            }
+          }, 3200);
         }
         debugLog('[Signaling] My peer ID:', this.peerId);
         // Set peer ID for Perfect Negotiation pattern
@@ -1132,10 +1138,13 @@ class CloudDrop {
       case 'ice-candidate':
         this.webrtc.handleIceCandidate(msg.from, msg.data);
         break;
-      case 'relay-data':
+      case 'relay-data': {
         // 按 peer 串行排队：chunk 解密/落盘完成后才处理后续 file-end
-        this.enqueuePeerMessage(msg.from, () => this.webrtc.handleRelayData(msg.from, msg.data));
+        // 捕获当时的 manager，避免重连后旧消息落入新管理器
+        const mgr = this.webrtc;
+        this.enqueuePeerMessage(msg.from, () => mgr.handleRelayData(msg.from, msg.data));
         break;
+      }
       case 'key-exchange':
         this.webrtc.handleKeyExchange(msg.from, msg.data);
         break;
@@ -1145,6 +1154,14 @@ class CloudDrop {
       case 'set-password-result':
         if (this._setPasswordResolve) {
           this._setPasswordResolve(msg.success ? { success: true } : { success: false, error: msg.error || 'FAILED' });
+        }
+        break;
+      case 'room-locked':
+        // 房间里其他人设置了密码：清理本地状态，提示重新输入密码加入
+        this.clearRoomPassword();
+        ui.showToast(i18n.t('room.roomLockedByOther'), 'warning');
+        if (this.roomCode) {
+          ui.showJoinRoomModal(this.roomCode, true);
         }
         break;
       case 'identity-challenge':
@@ -1186,7 +1203,7 @@ class CloudDrop {
     this.pendingFileRequest = request;
 
     // Check if this device is trusted - auto-accept if so
-    if (peer && this.isDeviceTrusted(peer)) {
+    if (peer && await this.isDeviceTrusted(peer)) {
       // 密钥指纹信任：先验证对方确实持有设备私钥，防公钥抄袭伪造
       const verified = await this.verifyPeerIdentity(peer);
       if (verified) {
@@ -1236,6 +1253,20 @@ class CloudDrop {
 
     // Send acceptance
     this.webrtc.respondToFileRequest(peerId, fileId, true);
+
+    // 登记接收授权（file-start 只接受登记过的 fileId）
+    if (isBatch) {
+      for (const f of data.files) {
+        this.webrtc.authorizeIncomingTransfer(peerId, f.fileId, f);
+      }
+    } else {
+      this.webrtc.authorizeIncomingTransfer(peerId, fileId, {
+        name: data.name,
+        size: data.size,
+        mimeType: data.mimeType,
+        totalChunks: data.totalChunks
+      });
+    }
 
     // Save current transfer state for cancellation
     this.currentTransfer = {
@@ -1307,7 +1338,7 @@ class CloudDrop {
 
     // Trust the device first
     if (peer) {
-      this.trustDevice(peer);
+      await this.trustDevice(peer);
     }
 
     // Then accept the file
@@ -1340,10 +1371,12 @@ class CloudDrop {
     ui.addPeerToGrid(peer, document.getElementById('peersGrid'), (p, e) => this.onPeerClick(p, e));
 
     // Check if this device is trusted and show badge
-    if (this.isDeviceTrusted(peer)) {
-      // Small delay to ensure DOM is ready
-      setTimeout(() => this.updateTrustedBadge(peer.id, true), 50);
-    }
+    this.isDeviceTrusted(peer).then((trusted) => {
+      if (trusted) {
+        // Small delay to ensure DOM is ready
+        setTimeout(() => this.updateTrustedBadge(peer.id, true), 50);
+      }
+    });
 
     // 计算并展示短安全码（密钥未就绪时为 null，就绪后由 onPeerKeyReady 更新）
     this.updatePeerSafetyCode(peer.id);

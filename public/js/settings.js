@@ -112,33 +112,28 @@ export const SettingsMixin = {
     }
   },
 
-  getDeviceFingerprint(peer) {
-    // 仅认可持久设备公钥指纹：无 deviceKey / 身份未持久化时返回 null，
-    // 不提供可伪造的名称指纹回退（旧信任记录需人工重新信任一次）
+  async getDeviceFingerprint(peer) {
+    // 仅认可持久设备公钥的 SHA-256 指纹（256 位）：无 deviceKey /
+    // 身份未持久化时返回 null，不提供可伪造的名称指纹回退
     if (peer.deviceKey && cryptoManager.isIdentityPersistent()) {
-      return this.hashFingerprint(`key:${peer.deviceKey}`);
+      const hashBuffer = await crypto.subtle.digest(
+        'SHA-256',
+        new TextEncoder().encode(`key:${peer.deviceKey}`)
+      );
+      return Array.from(new Uint8Array(hashBuffer))
+        .map(b => b.toString(16).padStart(2, '0')).join('');
     }
     return null;
   },
 
-  hashFingerprint(str) {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash;
-    }
-    return hash.toString(16);
-  },
-
-  isDeviceTrusted(peer) {
+  async isDeviceTrusted(peer) {
     // 仅认可密钥指纹：旧客户端（无 deviceKey）不自动接收，需人工确认
-    const fingerprint = this.getDeviceFingerprint(peer);
+    const fingerprint = await this.getDeviceFingerprint(peer);
     return !!fingerprint && this.trustedDevices.has(fingerprint);
   },
 
-  trustDevice(peer) {
-    const fingerprint = this.getDeviceFingerprint(peer);
+  async trustDevice(peer) {
+    const fingerprint = await this.getDeviceFingerprint(peer);
     if (!fingerprint) {
       // 无法证明设备身份（旧客户端/身份未持久化）：不建立信任
       ui.showToast(i18n.t('settings.trustRequiresDeviceKey') || '对方设备不支持身份验证，无法信任', 'warning');
@@ -155,8 +150,9 @@ export const SettingsMixin = {
     ui.showToast(i18n.t('toast.trusted', { name: peer.name }), 'success');
   },
 
-  untrustDevice(peer) {
-    const fingerprint = this.getDeviceFingerprint(peer);
+  async untrustDevice(peer) {
+    const fingerprint = await this.getDeviceFingerprint(peer);
+    if (!fingerprint) return;
     this.trustedDevices.delete(fingerprint);
     this.saveTrustedDevices();
     this.updateTrustedBadge(peer.id, false);
@@ -189,7 +185,7 @@ export const SettingsMixin = {
         });
 
         if (confirmed) {
-          this.untrustDevice(peer);
+          await this.untrustDevice(peer);
           ui.showToast(i18n.t('toast.untrusted', { name: peer.name }), 'info');
         }
       });
@@ -207,14 +203,14 @@ export const SettingsMixin = {
     }));
   },
 
-  removeTrustedDevice(fingerprint) {
+  async removeTrustedDevice(fingerprint) {
     const info = this.trustedDevices.get(fingerprint);
     this.trustedDevices.delete(fingerprint);
     this.saveTrustedDevices();
 
     // Update any matching peer cards
     for (const [peerId, peer] of this.peers.entries()) {
-      if (this.getDeviceFingerprint(peer) === fingerprint) {
+      if (await this.getDeviceFingerprint(peer) === fingerprint) {
         this.updateTrustedBadge(peerId, false);
       }
     }
@@ -275,7 +271,7 @@ export const SettingsMixin = {
         });
 
         if (confirmed) {
-          const info = this.removeTrustedDevice(fingerprint);
+          const info = await this.removeTrustedDevice(fingerprint);
           if (info) {
             ui.showToast(i18n.t('toast.untrusted', { name: info.name }), 'info');
           }
@@ -475,7 +471,7 @@ export const SettingsMixin = {
       <div class="trusted-device-item" data-fingerprint="${device.fingerprint}">
         <div class="trusted-device-info">
           <span class="trusted-device-name">${ui.escapeHtml(device.name)}</span>
-          <span class="trusted-device-type">${device.browserInfo || i18n.t('settings.unknownBrowser')}</span>
+          <span class="trusted-device-type">${ui.escapeHtml(device.browserInfo || '') || i18n.t('settings.unknownBrowser')}</span>
         </div>
         <button class="btn-untrust" data-fingerprint="${device.fingerprint}" title="${i18n.t('settings.untrust')}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -489,7 +485,7 @@ export const SettingsMixin = {
     container.querySelectorAll('.btn-untrust').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         const fingerprint = btn.dataset.fingerprint;
-        const info = this.removeTrustedDevice(fingerprint);
+        const info = await this.removeTrustedDevice(fingerprint);
         if (info) {
           ui.showToast(i18n.t('toast.untrusted', { name: info.name }), 'info');
         }
