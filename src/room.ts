@@ -17,7 +17,7 @@ export interface Env {
 }
 
 interface SignalingMessage {
-  type: 'join' | 'offer' | 'answer' | 'ice-candidate' | 'peer-joined' | 'peer-left' | 'relay-data' | 'name-changed' | 'key-exchange' | 'file-request' | 'file-response' | 'file-cancel' | 'identity-challenge' | 'identity-response' | 'set-password' | 'set-password-result' | 'auth' | 'auth-success' | 'challenge';
+  type: 'join' | 'offer' | 'answer' | 'ice-candidate' | 'peer-joined' | 'peer-left' | 'relay-data' | 'name-changed' | 'key-exchange' | 'file-request' | 'file-response' | 'file-cancel' | 'identity-challenge' | 'identity-response' | 'set-password' | 'set-password-result' | 'room-locked' | 'auth' | 'auth-success' | 'challenge';
   from?: string;
   to?: string;
   data?: unknown;
@@ -37,6 +37,7 @@ interface PeerAttachment {
   authChallenge?: string;
   authAttempts?: number; // Track failed attempts per connection
   clientBucket?: string; // 客户端网段桶（/24 或 /64 哈希），per-IP 爆破计数用
+  joinedAt?: number; // 加入房间时间戳（设密在场要求）
 }
 
 /**
@@ -66,6 +67,7 @@ export class Room {
   private static readonly MAX_ROOM_AUTH_FAILURES = 50; // Global failures per room within window
   private static readonly MAX_IP_AUTH_FAILURES = 10; // Per network-bucket failures within window
   private static readonly AUTH_FAILURE_WINDOW = 10 * 60 * 1000; // 10 minutes
+  private static readonly ROOM_CLAIM_MIN_PRESENCE = 3000; // 设密前需在房间内最短 3 秒
   private static readonly SECURE_ROOM_TTL = 600000; // 10 minutes
 
   constructor(state: DurableObjectState, _env: Env) {
@@ -162,14 +164,20 @@ export class Room {
       return;
     }
 
-    // 只允许首次设置
+    // 只允许首次设置；要求设置者已在房间内待满最短时间（提高抢注成本）
     if (this.passwordHash !== null) {
       this.sendErrorFrame(ws, 'PASSWORD_ALREADY_SET', '房间密码已设置');
       return;
     }
 
+    if (!attachment.joinedAt || (Date.now() - attachment.joinedAt) < Room.ROOM_CLAIM_MIN_PRESENCE) {
+      this.sendErrorFrame(ws, 'FORBIDDEN', '需要先在房间内停留片刻才能设置密码');
+      return;
+    }
+
     const body = msg.data as { passwordHash?: string };
-    if (!body?.passwordHash || typeof body.passwordHash !== 'string' || body.passwordHash.length > 128) {
+    // 严格格式：64 位十六进制（SHA-256）
+    if (!body?.passwordHash || typeof body.passwordHash !== 'string' || !/^[a-f0-9]{64}$/i.test(body.passwordHash)) {
       this.sendErrorFrame(ws, 'INVALID_PASSWORD_HASH', '无效的密码哈希');
       return;
     }
@@ -179,6 +187,9 @@ export class Room {
     await this.state.storage.setAlarm(Date.now() + Room.SECURE_ROOM_TTL);
 
     ws.send(JSON.stringify({ type: 'set-password-result', success: true }));
+
+    // 通知房间内其他设备：房间已被加密，需要密码重新加入
+    this.broadcast({ type: 'room-locked', data: {} }, attachment.id);
   }
 
   private handleWebSocket(request: Request): Response {
@@ -624,12 +635,9 @@ export class Room {
   private async handleJoin(ws: WebSocket, msg: SignalingMessage): Promise<void> {
     const joinData = msg.data as { name: string; deviceType: 'desktop' | 'mobile' | 'tablet'; browserInfo?: string; deviceKey?: string };
 
-    // 重复 join：先清理该连接之前的 peerId（防缓存污染 + 通知其他设备旧 ID 离开）
+    // 重复 join：记录旧 ID（缓存清理 + 通知其他设备旧 ID 离开）
     const oldAttachment = ws.deserializeAttachment() as PeerAttachment | null;
-    if (oldAttachment?.id) {
-      this.peerWsCache?.delete(oldAttachment.id);
-      this.broadcast({ type: 'peer-left', data: { id: oldAttachment.id } });
-    }
+    const oldId = oldAttachment?.id || null;
 
     const peerId = crypto.randomUUID();
 
@@ -648,14 +656,23 @@ export class Room {
       browserInfo: this.sanitizeString(joinData.browserInfo || '', 100), // Limit browser info length
       deviceKey: this.sanitizeString(joinData.deviceKey || '', 500), // 设备身份公钥（SPKI base64）
       isAuthenticated: true, // If they reached here, they are authenticated (or no password required)
+      joinedAt: Date.now(),
     };
 
-    // Store peer info in WebSocket attachment (survives hibernation)
+    // 先更新附件，再同步缓存（休眠唤醒后缓存为 null 时从最新附件重建，
+    // 旧 peerId 自然不在缓存中，不会留下脏条目）
     ws.serializeAttachment(attachment);
+    if (!this.peerWsCache) {
+      this.rebuildPeerCache();
+    } else {
+      if (oldId) this.peerWsCache.delete(oldId);
+      this.peerWsCache.set(peerId, ws);
+    }
 
-    // Keep the peerId -> ws cache in sync（旧 ID 已在函数开头清理）
-    if (!this.peerWsCache) this.rebuildPeerCache();
-    this.peerWsCache?.set(peerId, ws);
+    // 重复 join：通知其他设备旧 ID 已离开
+    if (oldId) {
+      this.broadcast({ type: 'peer-left', data: { id: oldId } });
+    }
 
     // Setup auto-response for ping/pong
     this.state.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
