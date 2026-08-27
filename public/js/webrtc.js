@@ -292,6 +292,7 @@ export class WebRTCManager {
     // Active transfer tracking for cancellation support
     this.activeTransfers = new Map(); // fileId -> { peerId, direction: 'send'|'receive', cancelled: boolean }
     this.onTransferCancelled = null; // Callback when transfer is cancelled by peer
+    this.onTransferFailed = null; // Callback when a transfer fails (e.g. incomplete data)
 
     // Pre-fetch ICE servers eagerly
     fetchIceServers();
@@ -1447,7 +1448,11 @@ export class WebRTCManager {
 
       console.log(`[WebRTC] Relay transfer complete: ${totalChunks} chunks sent`);
     } finally {
-      this.activeTransfers.delete(fileId);
+      // Keep transfer state for a grace period so the receiver can request
+      // retransmission of chunks that were dropped in transit
+      setTimeout(() => {
+        this.activeTransfers.delete(fileId);
+      }, RELAY.RETRANSMIT_GRACE);
     }
   }
 
@@ -1658,57 +1663,84 @@ export class WebRTCManager {
         const expectedCount = data.totalChunks || transfer.totalChunks;
         let receivedCount = transfer.receivedIndices ? transfer.receivedIndices.size : 0;
 
-        // If chunks are missing, wait a bit for them to arrive (they might be in-flight)
-        if (receivedCount < expectedCount) {
-          console.log(`[WebRTC] Waiting for missing chunks: ${receivedCount}/${expectedCount}`);
-          const waitStart = Date.now();
-          const maxWait = 3000; // Wait up to 3 seconds for missing chunks
-
-          await new Promise(resolve => {
-            const checkInterval = setInterval(() => {
-              receivedCount = transfer.receivedIndices ? transfer.receivedIndices.size : 0;
-              if (receivedCount >= expectedCount || Date.now() - waitStart > maxWait) {
-                clearInterval(checkInterval);
-                resolve();
-              }
-            }, 100);
-          });
-
-          receivedCount = transfer.receivedIndices ? transfer.receivedIndices.size : 0;
-        }
-
-        if (receivedCount !== expectedCount) {
-          console.error(`[WebRTC] Transfer incomplete: expected ${expectedCount} chunks, received ${receivedCount}`);
-          // Find missing chunks
+        const collectMissing = () => {
           const missing = [];
           for (let i = 0; i < expectedCount; i++) {
             if (!transfer.receivedIndices || !transfer.receivedIndices.has(i)) {
               missing.push(i);
             }
           }
-          console.error(`[WebRTC] Missing chunks: ${missing.join(', ')}`);
+          return missing;
+        };
+
+        const waitForChunks = (ms) => new Promise(resolve => {
+          const waitStart = Date.now();
+          const checkInterval = setInterval(() => {
+            receivedCount = transfer.receivedIndices ? transfer.receivedIndices.size : 0;
+            if (receivedCount >= expectedCount || Date.now() - waitStart > ms) {
+              clearInterval(checkInterval);
+              resolve();
+            }
+          }, 100);
+        });
+
+        // Wait for in-flight chunks, then request retransmission of missing ones
+        if (receivedCount < expectedCount) {
+          console.log(`[WebRTC] Waiting for in-flight chunks: ${receivedCount}/${expectedCount}`);
+          await waitForChunks(RELAY.RETRANSMIT_WAIT);
+
+          for (let round = 0; round < RELAY.RETRANSMIT_ROUNDS && receivedCount < expectedCount; round++) {
+            const missing = collectMissing();
+            if (missing.length === 0) break;
+            console.log(`[WebRTC] Requesting retransmission of ${missing.length} chunks (round ${round + 1}/${RELAY.RETRANSMIT_ROUNDS})`);
+            this.signaling.send({
+              type: 'relay-data',
+              to: peerId,
+              data: { type: 'retransmit-request', fileId: transfer.fileId, missing }
+            });
+            await waitForChunks(RELAY.RETRANSMIT_WAIT);
+          }
+        }
+
+        // NEVER deliver an incomplete/corrupt file - fail the transfer instead
+        if (receivedCount !== expectedCount || transfer.received !== transfer.size) {
+          console.error(`[WebRTC] Transfer incomplete: expected ${expectedCount} chunks (${transfer.size} bytes), got ${receivedCount} chunks (${transfer.received} bytes) - discarding`);
+          if (this.onTransferFailed) {
+            this.onTransferFailed(peerId, transfer.fileId, transfer.name, 'incomplete');
+          }
+          this.incomingTransfers.delete(peerId);
+          this.activeTransfers.delete(transfer.fileId);
+          return;
         }
 
         // Build blob from chunks in correct order
         const orderedChunks = [];
         for (let i = 0; i < expectedCount; i++) {
-          if (transfer.chunks[i]) {
-            orderedChunks.push(transfer.chunks[i]);
-          }
+          orderedChunks.push(transfer.chunks[i]);
         }
 
         const blob = new Blob(orderedChunks, { type: transfer.mimeType || 'application/octet-stream' });
-
-        // Verify size
-        if (blob.size !== transfer.size) {
-          console.warn(`[WebRTC] Size mismatch: expected ${transfer.size}, got ${blob.size}`);
-        }
 
         console.log(`[WebRTC] Transfer complete: ${receivedCount}/${expectedCount} chunks, size: ${blob.size}`);
 
         if (this.onFileReceived) this.onFileReceived(peerId, transfer.name, blob);
         this.incomingTransfers.delete(peerId);
         this.activeTransfers.delete(transfer.fileId);
+      }
+    } else if (data.type === 'retransmit-request') {
+      // Receiver asked for chunks missing at its end - resend if state still held
+      const transfer = this.activeTransfers.get(data.fileId);
+      if (transfer && transfer.direction === 'send' && transfer.pendingChunks) {
+        const missing = Array.isArray(data.missing) ? data.missing : [];
+        console.log(`[WebRTC] Retransmitting ${missing.length} chunks for ${data.fileId}`);
+        for (const index of missing) {
+          const chunk = transfer.pendingChunks.get(index);
+          if (chunk) {
+            this._sendChunk(peerId, data.fileId, index, chunk.base64, chunk.retries + 1);
+            chunk.retries += 1;
+            chunk.sentAt = Date.now();
+          }
+        }
       }
     } else if (data.type === 'chunk') {
       const transfer = this.incomingTransfers.get(peerId);

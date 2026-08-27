@@ -106,6 +106,11 @@ export const RELAY = {
 
   // Transfer timeout (no progress)
   TRANSFER_TIMEOUT: 30000, // 30 seconds
+
+  // Missing-chunk recovery (after file-end)
+  RETRANSMIT_GRACE: 15000,   // Sender keeps chunk state 15s after file-end
+  RETRANSMIT_ROUNDS: 2,      // Receiver requests retransmission up to 2 rounds
+  RETRANSMIT_WAIT: 2500,     // Wait 2.5s per round for retransmitted chunks
 };
 
 // =============================================================================

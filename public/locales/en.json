@@ -120,6 +120,7 @@
     "waitingFor": "Waiting for {{name}} to confirm...",
     "cancelTransfer": "Cancel Transfer",
     "transferCancelled": "Transfer cancelled",
+    "transferIncomplete": "Transfer failed: file incomplete, please retry",
     "transferComplete": "Transfer complete",
     "releaseToDrop": "Release to send file",
     "fileCount": {

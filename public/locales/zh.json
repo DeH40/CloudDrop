@@ -121,6 +121,7 @@
     "waitingFor": "等待 {{name}} 确认接收...",
     "cancelTransfer": "取消传输",
     "transferCancelled": "传输已取消",
+    "transferIncomplete": "传输失败：文件不完整，请重试",
     "transferComplete": "传输完成",
     "releaseToDrop": "释放以发送文件",
     "fileCount": {

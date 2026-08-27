@@ -55,12 +55,15 @@ export class Room {
   private state: DurableObjectState;
   private passwordHash: string | null; // Password hash for secure rooms (null = no password)
   private messageRateLimits: Map<WebSocket, { count: number; lastReset: number }> = new Map();
+  private relayByteBudget: Map<WebSocket, { tokens: number; lastRefill: number }> = new Map();
   // Removed global passwordAttempts to prevent DoS
 
   // Constants
   private static readonly MAX_NAME_LENGTH = 50;
   private static readonly RATE_LIMIT_WINDOW = 1000; // 1 second
-  private static readonly MAX_MSGS_PER_WINDOW = 10; // 10 messages per second
+  private static readonly MAX_MSGS_PER_WINDOW = 10; // 10 messages per second (control messages)
+  private static readonly RELAY_BYTES_PER_SEC = 2 * 1024 * 1024; // 2MB/s data budget for relay/ICE
+  private static readonly RELAY_BURST_BYTES = 4 * 1024 * 1024; // 4MB burst allowance
   private static readonly MAX_PASSWORD_ATTEMPTS = 5; // 5 attempts per connection
   private static readonly SECURE_ROOM_TTL = 600000; // 10 minutes
 
@@ -288,25 +291,30 @@ export class Room {
    */
   async webSocketMessage(ws: WebSocket, message: ArrayBuffer | string): Promise<void> {
     try {
-      // 1. Rate Limiting Check
-      if (this.isRateLimited(ws)) {
-        // Optional: Send warning or just ignore
-        return; 
-      }
-
       const data = typeof message === 'string' ? message : new TextDecoder().decode(message);
-      
-      // 2. Message Size Validation (Basic DoS protection)
+
+      // 1. Message Size Validation (Basic DoS protection)
       if (data.length > 262144) { 
-         ws.send(JSON.stringify({
-           type: 'error',
-           error: 'MESSAGE_TOO_LARGE',
-           message: 'Message exceeds size limit (256KB)'
-         }));
+         this.sendErrorFrame(ws, 'MESSAGE_TOO_LARGE', 'Message exceeds size limit (256KB)');
          return;
       }
 
       const msg: SignalingMessage = JSON.parse(data);
+
+      // 2. Typed rate limiting:
+      //    - relay-data / ice-candidate: byte-based token bucket (2MB/s) so file
+      //      chunks and ICE candidates are NOT starved by the control limiter
+      //    - all other (control) messages: low per-connection message quota,
+      //      exceeded -> identifiable error frame instead of silent drop
+      if (msg.type === 'relay-data' || msg.type === 'ice-candidate') {
+        if (!this.consumeRelayBudget(ws, data.length)) {
+          // Silently drop: chunk senders recover via ACK/retransmission
+          return;
+        }
+      } else if (this.isRateLimited(ws)) {
+        this.sendErrorFrame(ws, 'RATE_LIMIT_EXCEEDED', '消息发送过快，请稍后重试');
+        return;
+      }
 
       // Check authentication
       const attachment = ws.deserializeAttachment() as PeerAttachment | null;
@@ -363,7 +371,7 @@ export class Room {
   }
 
   /**
-   * Check if WebSocket is rate limited
+   * Check if WebSocket is rate limited (control messages only)
    */
   private isRateLimited(ws: WebSocket): boolean {
     let limit = this.messageRateLimits.get(ws);
@@ -380,13 +388,51 @@ export class Room {
     }
 
     limit.count++;
-    
+
     // If exceeded, we can block
     if (limit.count > Room.MAX_MSGS_PER_WINDOW) {
       return true;
     }
-    
+
     return false;
+  }
+
+  /**
+   * Byte-based token bucket for data-heavy messages (relay chunks, ICE candidates)
+   * Allows ~2MB/s sustained with 4MB burst - file chunks recover from drops via
+   * the ACK/retransmission protocol, so silent drop is safe here.
+   */
+  private consumeRelayBudget(ws: WebSocket, bytes: number): boolean {
+    const now = Date.now();
+    let budget = this.relayByteBudget.get(ws);
+
+    if (!budget) {
+      budget = { tokens: Room.RELAY_BURST_BYTES, lastRefill: now };
+      this.relayByteBudget.set(ws, budget);
+    }
+
+    // Refill based on elapsed time
+    const elapsed = (now - budget.lastRefill) / 1000;
+    budget.tokens = Math.min(Room.RELAY_BURST_BYTES, budget.tokens + elapsed * Room.RELAY_BYTES_PER_SEC);
+    budget.lastRefill = now;
+
+    if (budget.tokens < bytes) {
+      return false;
+    }
+
+    budget.tokens -= bytes;
+    return true;
+  }
+
+  /**
+   * Send an error frame to a client
+   */
+  private sendErrorFrame(ws: WebSocket, error: string, message: string): void {
+    try {
+      ws.send(JSON.stringify({ type: 'error', error, message }));
+    } catch (e) {
+      // Connection may be closing - ignore
+    }
   }
 
   /**
@@ -474,6 +520,7 @@ export class Room {
    */
   async webSocketClose(ws: WebSocket, _code: number, _reason: string, _wasClean: boolean): Promise<void> {
     this.messageRateLimits.delete(ws);
+    this.relayByteBudget.delete(ws);
     await this.handleLeave(ws);
   }
 
@@ -482,6 +529,7 @@ export class Room {
    */
   async webSocketError(ws: WebSocket, _error: unknown): Promise<void> {
     this.messageRateLimits.delete(ws);
+    this.relayByteBudget.delete(ws);
     await this.handleLeave(ws);
   }
 

@@ -938,6 +938,13 @@ class CloudDrop {
       this.currentTransfer = null;
     };
 
+    // Transfer failed callback (incomplete/corrupt data - never deliver silently)
+    this.webrtc.onTransferFailed = (peerId, fileId, fileName, reason) => {
+      ui.hideModal('transferModal');
+      ui.showToast(i18n.t('transfer.transferIncomplete', { name: fileName }), 'error');
+      this.currentTransfer = null;
+    };
+
     // Connection state change handler
     this.webrtc.onConnectionStateChange = ({ peerId, status, message }) => {
       const toastId = `connection-${peerId}`;
