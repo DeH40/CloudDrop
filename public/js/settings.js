@@ -318,169 +318,109 @@ export const SettingsMixin = {
       this.syncTrustedDevicesToUI('modal');
     });
 
-    // Theme controls - mobile
-    const themeInputsModal = document.querySelectorAll('input[name="theme-modal"]');
-    themeInputsModal.forEach((input) => {
+    // 主题选择：两端面板共用绑定逻辑，变更即同步另一面板
+    this._bindThemeControls('theme-modal', 'theme-popover');
+    this._bindThemeControls('theme-popover', 'theme-modal');
+
+    // 布尔开关：两端同键双向同步（声明式配置，替代逐开关重复样板）
+    this._bindToggleSync('settingsRelayFallback', 'popoverRelayFallback', 'allowRelayFallback',
+      ['relayTimeoutRow', 'popoverRelayTimeoutRow']);
+    this._bindToggleSync('settingsPrewarm', 'popoverPrewarm', 'enablePrewarm');
+    this._bindToggleSync('settingsNotifications', 'popoverNotifications', 'enableNotifications', null, true);
+
+    // 降级超时：两端滑块+输入框四控件双向同步
+    this._bindTimeoutSync('settingsRelayTimeoutSlider', 'settingsRelayTimeout',
+      'popoverRelayTimeoutSlider', 'popoverRelayTimeout');
+  },
+
+  /**
+   * 绑定主题单选框：本面板变更 -> 保存设置 + 同步另一面板
+   */
+  _bindThemeControls(groupName, otherGroupName) {
+    const otherTarget = otherGroupName === 'theme-popover' ? 'popover' : 'modal';
+    document.querySelectorAll(`input[name="${groupName}"]`).forEach((input) => {
       input.addEventListener('change', (e) => {
         if (!e.target.checked) return;
         this.updateSetting('theme', e.target.value);
-        this.syncThemeToUI('popover');
+        this.syncThemeToUI(otherTarget);
       });
-    });
-
-    // Theme controls - desktop popover
-    const themeInputsPopover = document.querySelectorAll('input[name="theme-popover"]');
-    themeInputsPopover.forEach((input) => {
-      input.addEventListener('change', (e) => {
-        if (!e.target.checked) return;
-        this.updateSetting('theme', e.target.value);
-        this.syncThemeToUI('modal');
-      });
-    });
-
-    // 中继降级开关 - 移动端
-    const relayFallbackToggle = document.getElementById('settingsRelayFallback');
-    const relayTimeoutRow = document.getElementById('relayTimeoutRow');
-    relayFallbackToggle?.addEventListener('change', (e) => {
-      this.updateSetting('allowRelayFallback', e.target.checked);
-      if (relayTimeoutRow) {
-        relayTimeoutRow.style.display = e.target.checked ? 'flex' : 'none';
-      }
-      // 同步到桌面端
-      const popoverToggle = document.getElementById('popoverRelayFallback');
-      if (popoverToggle) popoverToggle.checked = e.target.checked;
-    });
-
-    // 中继降级开关 - 桌面端
-    const popoverRelayFallbackToggle = document.getElementById('popoverRelayFallback');
-    const popoverRelayTimeoutRow = document.getElementById('popoverRelayTimeoutRow');
-    popoverRelayFallbackToggle?.addEventListener('change', (e) => {
-      this.updateSetting('allowRelayFallback', e.target.checked);
-      if (popoverRelayTimeoutRow) {
-        popoverRelayTimeoutRow.style.display = e.target.checked ? 'flex' : 'none';
-      }
-      // 同步到移动端
-      if (relayFallbackToggle) relayFallbackToggle.checked = e.target.checked;
-    });
-
-    // 降级超时控件 - 移动端
-    const relayTimeoutSlider = document.getElementById('settingsRelayTimeoutSlider');
-    const relayTimeoutInput = document.getElementById('settingsRelayTimeout');
-
-    // 滑块拖动时同步输入框
-    relayTimeoutSlider?.addEventListener('input', (e) => {
-      const value = parseInt(e.target.value);
-      if (relayTimeoutInput) relayTimeoutInput.value = value;
-      // 同步到桌面端
-      const popoverSlider = document.getElementById('popoverRelayTimeoutSlider');
-      const popoverInput = document.getElementById('popoverRelayTimeout');
-      if (popoverSlider) popoverSlider.value = value;
-      if (popoverInput) popoverInput.value = value;
-    });
-    relayTimeoutSlider?.addEventListener('change', (e) => {
-      this.updateSetting('relayFallbackTimeout', parseInt(e.target.value));
-    });
-
-    // 输入框修改时同步滑块
-    relayTimeoutInput?.addEventListener('change', (e) => {
-      const value = this.clampTimeout(parseInt(e.target.value) || 5);
-      e.target.value = value;
-      if (relayTimeoutSlider) relayTimeoutSlider.value = value;
-      this.updateSetting('relayFallbackTimeout', value);
-      // 同步到桌面端
-      const popoverSlider = document.getElementById('popoverRelayTimeoutSlider');
-      const popoverInput = document.getElementById('popoverRelayTimeout');
-      if (popoverSlider) popoverSlider.value = value;
-      if (popoverInput) popoverInput.value = value;
-    });
-
-    // 降级超时控件 - 桌面端
-    const popoverRelayTimeoutSlider = document.getElementById('popoverRelayTimeoutSlider');
-    const popoverRelayTimeoutInput = document.getElementById('popoverRelayTimeout');
-
-    // 滑块拖动时同步输入框
-    popoverRelayTimeoutSlider?.addEventListener('input', (e) => {
-      const value = parseInt(e.target.value);
-      if (popoverRelayTimeoutInput) popoverRelayTimeoutInput.value = value;
-      // 同步到移动端
-      if (relayTimeoutSlider) relayTimeoutSlider.value = value;
-      if (relayTimeoutInput) relayTimeoutInput.value = value;
-    });
-    popoverRelayTimeoutSlider?.addEventListener('change', (e) => {
-      this.updateSetting('relayFallbackTimeout', parseInt(e.target.value));
-    });
-
-    // 输入框修改时同步滑块
-    popoverRelayTimeoutInput?.addEventListener('change', (e) => {
-      const value = this.clampTimeout(parseInt(e.target.value) || 5);
-      e.target.value = value;
-      if (popoverRelayTimeoutSlider) popoverRelayTimeoutSlider.value = value;
-      this.updateSetting('relayFallbackTimeout', value);
-      // 同步到移动端
-      if (relayTimeoutSlider) relayTimeoutSlider.value = value;
-      if (relayTimeoutInput) relayTimeoutInput.value = value;
-    });
-
-    // 连接预热开关 - 移动端
-    const prewarmToggle = document.getElementById('settingsPrewarm');
-    prewarmToggle?.addEventListener('change', (e) => {
-      this.updateSetting('enablePrewarm', e.target.checked);
-      // 同步到桌面端
-      const popoverToggle = document.getElementById('popoverPrewarm');
-      if (popoverToggle) popoverToggle.checked = e.target.checked;
-    });
-
-    // 连接预热开关 - 桌面端
-    const popoverPrewarmToggle = document.getElementById('popoverPrewarm');
-    popoverPrewarmToggle?.addEventListener('change', (e) => {
-      this.updateSetting('enablePrewarm', e.target.checked);
-      // 同步到移动端
-      if (prewarmToggle) prewarmToggle.checked = e.target.checked;
-    });
-
-    // 浏览器通知开关 - 移动端
-    const notificationsToggle = document.getElementById('settingsNotifications');
-    notificationsToggle?.addEventListener('change', async (e) => {
-      const enabled = e.target.checked;
-
-      // 如果启用，请求通知权限
-      if (enabled) {
-        const granted = await ui.requestNotificationPermission();
-        if (!granted) {
-          // 权限被拒绝，取消选中
-          e.target.checked = false;
-          ui.showToast(i18n.t('toast.notificationPermissionDenied') || '浏览器通知权限被拒绝', 'warning');
-          return;
-        }
-      }
-
-      this.updateSetting('enableNotifications', enabled);
-      // 同步到桌面端
-      const popoverToggle = document.getElementById('popoverNotifications');
-      if (popoverToggle) popoverToggle.checked = enabled;
-    });
-
-    // 浏览器通知开关 - 桌面端
-    const popoverNotificationsToggle = document.getElementById('popoverNotifications');
-    popoverNotificationsToggle?.addEventListener('change', async (e) => {
-      const enabled = e.target.checked;
-
-      // 如果启用，请求通知权限
-      if (enabled) {
-        const granted = await ui.requestNotificationPermission();
-        if (!granted) {
-          // 权限被拒绝，取消选中
-          e.target.checked = false;
-          ui.showToast(i18n.t('toast.notificationPermissionDenied') || '浏览器通知权限被拒绝', 'warning');
-          return;
-        }
-      }
-
-      this.updateSetting('enableNotifications', enabled);
-      // 同步到移动端
-      if (notificationsToggle) notificationsToggle.checked = enabled;
     });
   },
+
+  /**
+   * 绑定一对布尔开关（移动端/桌面端）：变更 -> 保存 + 同步对端 + 联动行显隐
+   * @param {string} idA - 面板 A 控件 id
+   * @param {string} idB - 面板 B 控件 id
+   * @param {string} settingKey - 设置键
+   * @param {string[]|null} rowIds - [A 行 id, B 行 id]，联动显示/隐藏
+   * @param {boolean} requestPermission - 开启前请求浏览器权限（通知）
+   */
+  _bindToggleSync(idA, idB, settingKey, rowIds = null, requestPermission = false) {
+    const bind = (toggleId, otherId, ownRowId, otherRowId) => {
+      const toggle = document.getElementById(toggleId);
+      if (!toggle) return;
+
+      toggle.addEventListener('change', async (e) => {
+        const enabled = e.target.checked;
+
+        if (requestPermission && enabled) {
+          const granted = await ui.requestNotificationPermission();
+          if (!granted) {
+            e.target.checked = false;
+            ui.showToast(i18n.t('toast.notificationPermissionDenied') || '浏览器通知权限被拒绝', 'warning');
+            return;
+          }
+        }
+
+        this.updateSetting(settingKey, enabled);
+
+        if (ownRowId) {
+          const row = document.getElementById(ownRowId);
+          if (row) row.style.display = enabled ? 'flex' : 'none';
+        }
+
+        const other = document.getElementById(otherId);
+        if (other) other.checked = enabled;
+
+        if (otherRowId) {
+          const otherRow = document.getElementById(otherRowId);
+          if (otherRow) otherRow.style.display = enabled ? 'flex' : 'none';
+        }
+      });
+    };
+
+    bind(idA, idB, rowIds ? rowIds[0] : null, rowIds ? rowIds[1] : null);
+    bind(idB, idA, rowIds ? rowIds[1] : null, rowIds ? rowIds[0] : null);
+  },
+
+  /**
+   * 绑定降级超时滑块+输入框：两端四个控件双向同步
+   */
+  _bindTimeoutSync(sliderIdA, inputIdA, sliderIdB, inputIdB) {
+    const sliders = [document.getElementById(sliderIdA), document.getElementById(sliderIdB)].filter(Boolean);
+    const inputs = [document.getElementById(inputIdA), document.getElementById(inputIdB)].filter(Boolean);
+
+    sliders.forEach((slider) => {
+      slider.addEventListener('input', (e) => {
+        const value = parseInt(e.target.value);
+        inputs.forEach((i) => { i.value = value; });
+        sliders.forEach((s) => { if (s !== e.target) s.value = value; });
+      });
+      slider.addEventListener('change', (e) => {
+        this.updateSetting('relayFallbackTimeout', parseInt(e.target.value));
+      });
+    });
+
+    inputs.forEach((input) => {
+      input.addEventListener('change', (e) => {
+        const value = this.clampTimeout(parseInt(e.target.value) || 5);
+        e.target.value = value;
+        inputs.forEach((i) => { if (i !== e.target) i.value = value; });
+        sliders.forEach((s) => { s.value = value; });
+        this.updateSetting('relayFallbackTimeout', value);
+      });
+    });
+  },,
 
   syncSettingsToUI(target) {
     // 中继降级开关
