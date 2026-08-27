@@ -150,6 +150,7 @@
     "placeholder": "输入 6 位房间号",
     "passwordPlaceholder": "房间密码(至少6位)",
     "passwordRequired": "此房间需要密码才能加入",
+    "roomExpired": "房间密码已过期，已恢复为普通房间",
     "invalidCode": "房间号格式无效(需要6位字母数字)",
     "createSecure": "创建加密房间",
     "createSecureDesc": "创建一个加密房间,只有拥有密码的用户才能加入",

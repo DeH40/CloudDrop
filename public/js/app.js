@@ -763,6 +763,16 @@ class CloudDrop {
       // If secure room, we wait for 'challenge' message
       if (!this.isSecureRoom || !this.roomPasswordHash) {
         this.sendJoinMessage();
+      } else {
+        // Secure room: waiting for challenge - add timeout fallback so we never
+        // get stuck forever (e.g. server dropped the password after TTL expiry)
+        if (this._secureJoinTimeout) clearTimeout(this._secureJoinTimeout);
+        this._secureJoinTimeout = setTimeout(() => {
+          console.warn('[App] 等待挑战超时，房间密码可能已失效，重置后重连');
+          ui.showToast(i18n.t('room.roomExpired'), 'error');
+          this.clearRoomPassword();
+          this.connectWebSocket();
+        }, 8000);
       }
     };
 
@@ -796,6 +806,22 @@ class CloudDrop {
     };
 
     this.ws.onclose = (event) => {
+      // Clear any pending secure-join timeout
+      if (this._secureJoinTimeout) {
+        clearTimeout(this._secureJoinTimeout);
+        this._secureJoinTimeout = null;
+      }
+
+      // Room destroyed by server (password TTL expired) - password is gone,
+      // reset local password state and reconnect as a normal room
+      if (event.code === 4000) {
+        ui.updateConnectionStatus('disconnected');
+        ui.showToast(i18n.t('room.roomExpired'), 'info');
+        this.clearRoomPassword();
+        setTimeout(() => this.connectWebSocket(), 500);
+        return;
+      }
+
       // Handle password authentication errors (custom close codes)
       if (event.code === 4001 || event.code === 4002) {
         // Password error - don't auto-reconnect
@@ -998,6 +1024,11 @@ class CloudDrop {
         break;
       case 'joined':
         this.peerId = msg.peerId;
+        // Joined successfully - cancel any secure-join timeout
+        if (this._secureJoinTimeout) {
+          clearTimeout(this._secureJoinTimeout);
+          this._secureJoinTimeout = null;
+        }
         console.log('[Signaling] My peer ID:', this.peerId);
         // Set peer ID for Perfect Negotiation pattern
         this.webrtc.setMyPeerId(this.peerId);

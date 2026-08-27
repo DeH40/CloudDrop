@@ -151,6 +151,7 @@
     "placeholder": "Enter 6-digit room code",
     "passwordPlaceholder": "Room password (at least 6 characters)",
     "passwordRequired": "This room requires a password to join",
+    "roomExpired": "Room password expired, reverted to a normal room",
     "invalidCode": "Invalid room code format (requires 6 alphanumeric characters)",
     "createSecure": "Create Encrypted Room",
     "createSecureDesc": "Create an encrypted room, only users with the password can join",
