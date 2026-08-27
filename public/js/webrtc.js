@@ -1722,12 +1722,25 @@ export class WebRTCManager {
   }
 
   /**
-   * 校验文件元数据（大小与分块数严格整数且在范围内）
+   * file-start 与授权记录逐字段匹配 + 大小/分块数一致性校验
+   * （totalChunks 必须等于 ceil(size / CHUNK_SIZE)，防伪造计数 DoS）
    */
-  _isValidFileMeta(size, totalChunks) {
-    return Number.isInteger(size) && size >= 0 && size <= MAX_FILE_SIZE &&
-      Number.isInteger(totalChunks) && totalChunks >= 1 &&
-      totalChunks <= Math.ceil(MAX_FILE_SIZE / CHUNK_SIZE) + 1;
+  _matchAuthorizedMeta(authorized, msg) {
+    const { size, totalChunks } = msg;
+    if (!Number.isInteger(size) || size < 0 || size > MAX_FILE_SIZE) return false;
+    if (!Number.isInteger(totalChunks) || totalChunks < 1) return false;
+    if (totalChunks > Math.ceil(MAX_FILE_SIZE / CHUNK_SIZE) + 1) return false;
+
+    // 与用户确认时展示的字段完全一致
+    if (authorized.size !== size) return false;
+    if (authorized.totalChunks !== totalChunks) return false;
+    if (authorized.name !== msg.name) return false;
+    if (String(authorized.mimeType || '') !== String(msg.mimeType || '')) return false;
+
+    // 分块数必须与大小自洽
+    if (totalChunks !== Math.ceil(size / CHUNK_SIZE)) return false;
+
+    return true;
   }
 
   /** 分块是否已收齐 */
@@ -1760,11 +1773,15 @@ export class WebRTCManager {
     }
 
     debugLog(`[WebRTC] 补发请求 第${round}轮: ${missing.length} 个缺块 (${transfer.fileId})`);
-    this.signaling.send({
-      type: 'relay-data',
-      to: peerId,
-      data: { type: 'retransmit-request', fileId: transfer.fileId, missing }
-    });
+    // 分批发送，单条消息远低于服务端 256KB 上限
+    const BATCH = 2000;
+    for (let i = 0; i < missing.length; i += BATCH) {
+      this.signaling.send({
+        type: 'relay-data',
+        to: peerId,
+        data: { type: 'retransmit-request', fileId: transfer.fileId, missing: missing.slice(i, i + BATCH) }
+      });
+    }
 
     if (transfer.retransmitTimer) clearTimeout(transfer.retransmitTimer);
     transfer.retransmitTimer = setTimeout(() => {
@@ -1773,7 +1790,7 @@ export class WebRTCManager {
 
       if (this._relayTransferComplete(t)) {
         this._finalizeRelayTransfer(peerId, t);
-      } else if (round > RELAY.RETRANSMIT_ROUNDS) {
+      } else if (round >= RELAY.RETRANSMIT_ROUNDS) {
         this._failRelayTransfer(peerId, t);
       } else {
         this._scheduleRetransmit(peerId, t);
@@ -1895,16 +1912,18 @@ export class WebRTCManager {
       const msg = JSON.parse(data);
 
       if (msg.type === 'file-start') {
-        // 授权校验：只接受用户确认过的传输（防未确认推送/DoS）
+        // 授权校验：只接受用户确认过的传输（防未确认推送/DoS），
+        // 并逐字段匹配用户确认的元数据（一次性授权，开始后消费）
         const authorized = this.authorizedIncoming.get(msg.fileId);
         if (!authorized || authorized.peerId !== peerId) {
           debugLog(`[WebRTC] 未授权的 P2P file-start 已拒绝: ${msg.fileId}`);
           return;
         }
-        if (!this._isValidFileMeta(msg.size, msg.totalChunks)) {
-          console.warn(`[WebRTC] 非法文件元数据已拒绝: ${msg.fileId}`);
+        if (!this._matchAuthorizedMeta(authorized, msg)) {
+          console.warn(`[WebRTC] file-start 与授权元数据不一致已拒绝: ${msg.fileId}`);
           return;
         }
+        this.authorizedIncoming.delete(msg.fileId);
 
         // Check if we have a pre-confirmed transfer (from file-request flow)
         const existingTransfer = this.incomingTransfers.get(peerId);
@@ -2012,10 +2031,11 @@ export class WebRTCManager {
         if (transfer.useIdb) {
           // 大文件：分块落盘，避免内存 OOM
           await chunkStore.putChunk(transfer.fileId, transfer.chunkCount, bytes);
-          transfer.chunkCount++;
         } else {
           transfer.chunks.push(bytes);
         }
+        // 两个存储分支都统一递增（AAD 依赖正确的序号）
+        transfer.chunkCount++;
         transfer.received += decrypted.byteLength;
 
         if (this.onProgress) {
@@ -2043,16 +2063,18 @@ export class WebRTCManager {
     }
 
     if (data.type === 'file-start') {
-      // 授权校验：只接受用户确认过的传输（防未确认推送/DoS）
+      // 授权校验：只接受用户确认过的传输（防未确认推送/DoS），
+      // 并逐字段匹配用户确认的元数据（一次性授权，开始后消费）
       const authorized = this.authorizedIncoming.get(data.fileId);
       if (!authorized || authorized.peerId !== peerId) {
         debugLog(`[WebRTC] 未授权的 relay file-start 已拒绝: ${data.fileId}`);
         return;
       }
-      if (!this._isValidFileMeta(data.size, data.totalChunks)) {
-        console.warn(`[WebRTC] 非法文件元数据已拒绝: ${data.fileId}`);
+      if (!this._matchAuthorizedMeta(authorized, data)) {
+        console.warn(`[WebRTC] file-start 与授权元数据不一致已拒绝: ${data.fileId}`);
         return;
       }
+      this.authorizedIncoming.delete(data.fileId);
 
       // Check if we have a pre-confirmed transfer (from file-request flow)
       const existingTransfer = this.incomingTransfers.get(peerId);
@@ -2106,9 +2128,11 @@ export class WebRTCManager {
     } else if (data.type === 'file-end') {
       const transfer = this.incomingTransfers.get(peerId);
       if (transfer && transfer.fileId === data.fileId) {
-        // 非阻塞状态机：缺块时发起补发并立即返回，让后续 chunk 消息能进队列
+        // 非阻塞状态机：缺块时发起补发并立即返回，让后续 chunk 消息能进队列。
+        // 完全忽略对端 file-end 携带的计数（防伪造 huge totalChunks 的 DoS），
+        // 只信任已授权登记的 transfer.totalChunks
         transfer.fileEndReceived = true;
-        transfer.expectedCount = data.totalChunks || transfer.totalChunks;
+        transfer.expectedCount = transfer.totalChunks;
 
         // Send any remaining ACKs immediately
         if (transfer.pendingAcks && transfer.pendingAcks.length > 0) {
@@ -2123,7 +2147,6 @@ export class WebRTCManager {
           this._scheduleRetransmit(peerId, transfer);
         }
       }
-    }
     } else if (data.type === 'retransmit-request') {
       // Receiver asked for chunks missing at its end - resend if state still held
       const transfer = this.activeTransfers.get(data.fileId);
@@ -2208,7 +2231,6 @@ export class WebRTCManager {
           // Request retransmission by not sending ACK
         }
       }
-    }
     } else if (data.type === 'ack') {
       // Handle ACK from receiver
       this.handleRelayAck(peerId, data);

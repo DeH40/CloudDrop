@@ -49,23 +49,30 @@ test('SAS 快速码与完整验证：对称一致且格式正确', async () => {
 
   await a.importPeerPublicKey('peer-test', pubBB64);
 
-  // 快速码：8 位十六进制（32 bit，仅提示用途）
-  const quick = await a.computeSafetyCode('peer-test');
+  // 快速码：8 位十六进制（32 bit，仅提示用途），与完整验证同一摘要
+  const quick = await a.computeSafetyCode('peer-test', 'PEERDEVKEY');
   assert.match(quick, /^[0-9A-F]{8}$/);
 
-  // 完整验证：66 bit 中文词 + 完整 64 hex 指纹
-  const full = await a.computeFullVerification('peer-test');
+  // 完整验证：66 bit 中文词 + 完整 64 hex 指纹（ECDH + 持久身份双绑定）
+  const full = await a.computeFullVerification('peer-test', 'PEERDEVKEY');
   assert.equal(full.quick, quick);
   assert.match(full.fingerprint, /^[0-9A-F]{64}$/);
   assert.equal(full.words.length, 6);
 
-  // 对称性：以 B 视角计算（排序后应一致）
+  // 对称性：以 B 视角计算（ECDH 排序 + 身份排序后应一致）
   const pubA = await a.exportPublicKey();
-  const sorted = [pubA, pubBB64].sort();
-  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(sorted[0] + sorted[1]));
+  const myDevKey = await a.getDevicePublicKey();
+  const ecdh = [pubA, pubBB64].sort().join('|');
+  const identity = [myDevKey, 'PEERDEVKEY'].sort().join('|');
+  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(ecdh + '||' + identity));
   const expected = Array.from(new Uint8Array(hash))
     .map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
   assert.equal(full.fingerprint, expected);
+
+  // 身份绑定：替换 deviceKey 必须改变指纹（信令 MITM 换身份会被发现）
+  const swapped = await a.computeFullVerification('peer-test', 'EVILDEVKEY');
+  assert.notEqual(swapped.fingerprint, full.fingerprint);
+  assert.notEqual(swapped.quick, full.quick);
 
   a.removePeer('peer-test');
 });

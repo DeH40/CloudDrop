@@ -140,31 +140,37 @@ export class CryptoManager {
   /**
    * 快速提示码（8 位十六进制，32 bit）：主界面展示，仅用于发现普通连接错误，
    * 不是强安全验证。强验证请用 computeFullVerification。
+   * 与完整验证使用同一摘要（ECDH + 持久身份），保证两处展示一致。
    */
-  async computeSafetyCode(peerId) {
-    const peerKey = this.peerPublicKeys.get(peerId);
-    if (!peerKey) return null;
-
-    const myKey = await this.exportPublicKey();
-    const [a, b] = [myKey, peerKey].sort();
-    const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(a + b));
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.slice(0, 4).map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
+  async computeSafetyCode(peerId, peerDeviceKey = null) {
+    const full = await this.computeFullVerification(peerId, peerDeviceKey);
+    return full ? full.quick : null;
   }
 
   /**
-   * 完整验证信息：双方公钥排序后 SHA-256
+   * 完整验证信息：双方 ECDH 公钥 + 双方持久设备公钥 排序后 SHA-256。
+   * 绑定持久身份：信令中间人即使保持 ECDH 一致，替换 deviceKey 也会导致
+   * 安全词/指纹/二维码不一致（用户确认后固定的就是参与哈希的设备身份）。
    * - quick: 8 位快速码
    * - words: 6 个 BIP39 中文词（66 bit），人工口头核对
    * - fingerprint: 完整 64 位十六进制指纹（扫码/精确核对 + pin 信任）
+   * @param {string} peerId - ECDH 密钥对应的 peerId
+   * @param {string|null} peerDeviceKey - 对端持久设备公钥（join 携带）
    */
-  async computeFullVerification(peerId) {
+  async computeFullVerification(peerId, peerDeviceKey = null) {
     const peerKey = this.peerPublicKeys.get(peerId);
     if (!peerKey) return null;
 
     const myKey = await this.exportPublicKey();
-    const [a, b] = [myKey, peerKey].sort();
-    const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(a + b));
+    const myDeviceKey = await this.getDevicePublicKey();
+
+    // ECDH 与设备身份一起绑定：任一层被中间人替换都会破坏一致性
+    const ecdhParts = [myKey, peerKey].sort();
+    const identityParts = [myDeviceKey, peerDeviceKey || ''].sort();
+    const hashBuffer = await crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode(ecdhParts.join('|') + '||' + identityParts.join('|'))
+    );
     const bytes = new Uint8Array(hashBuffer);
 
     const fingerprint = Array.from(bytes)
@@ -254,8 +260,9 @@ export class CryptoManager {
     let roomIv = null;
 
     // Layer 1: Room-level encryption (if password is set)
+    // AAD 同样绑定 room 层：主动信令 MITM 无法把内层密文换序重封装
     if (this.hasRoomPassword()) {
-      const roomEncrypted = await this.encryptWithRoomKey(data);
+      const roomEncrypted = await this.encryptWithRoomKey(data, aad);
       data = roomEncrypted.encrypted;
       roomIv = roomEncrypted.iv;
     }
@@ -349,8 +356,9 @@ export class CryptoManager {
     let decrypted = await this.decrypt(peerId, encrypted.buffer, peerIv, aad);
 
     // Layer 2: Room-level decryption (if password is set)
+    // 同一 AAD 绑定 room 层，换序/替换内层密文会解密失败
     if (hasRoomKey && roomIv) {
-      decrypted = await this.decryptWithRoomKey(decrypted, roomIv);
+      decrypted = await this.decryptWithRoomKey(decrypted, roomIv, aad);
     }
 
     return decrypted;
@@ -556,7 +564,7 @@ export class CryptoManager {
    * @param {ArrayBuffer} data - Data to encrypt
    * @returns {Promise<{encrypted: ArrayBuffer, iv: Uint8Array}>}
    */
-  async encryptWithRoomKey(data) {
+  async encryptWithRoomKey(data, aad) {
     if (!this.hasRoomPassword()) {
       // No room password, return data as-is
       return { encrypted: data, iv: null };
@@ -565,10 +573,15 @@ export class CryptoManager {
     // Generate random IV
     const iv = crypto.getRandomValues(new Uint8Array(12));
 
+    const aadBytes = (aad === undefined || aad === null)
+      ? undefined
+      : (typeof aad === 'string' ? new TextEncoder().encode(aad) : aad);
+
     const encrypted = await crypto.subtle.encrypt(
       {
         name: 'AES-GCM',
-        iv: iv
+        iv: iv,
+        additionalData: aadBytes
       },
       this.roomKey,
       data
@@ -583,7 +596,7 @@ export class CryptoManager {
    * @param {Uint8Array} iv - Initialization vector
    * @returns {Promise<ArrayBuffer>}
    */
-  async decryptWithRoomKey(encryptedData, iv) {
+  async decryptWithRoomKey(encryptedData, iv, aad) {
     if (!this.hasRoomPassword()) {
       // No room password, return data as-is
       return encryptedData;
@@ -593,10 +606,15 @@ export class CryptoManager {
       throw new Error('IV is required for room key decryption');
     }
 
+    const aadBytes = (aad === undefined || aad === null)
+      ? undefined
+      : (typeof aad === 'string' ? new TextEncoder().encode(aad) : aad);
+
     const decrypted = await crypto.subtle.decrypt(
       {
         name: 'AES-GCM',
-        iv: iv
+        iv: iv,
+        additionalData: aadBytes
       },
       this.roomKey,
       encryptedData

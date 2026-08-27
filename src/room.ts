@@ -190,6 +190,17 @@ export class Room {
 
     // 通知房间内其他设备：房间已被加密，需要密码重新加入
     this.broadcast({ type: 'room-locked', data: {} }, attachment.id);
+
+    // 强制撤销旧成员：关闭除设密者外的所有连接（4001 = 需要密码）。
+    // 仅广播不足以撤销权限——被忽略时旧连接仍可继续转发信令
+    for (const otherWs of this.state.getWebSockets()) {
+      if (otherWs === ws) continue;
+      try {
+        otherWs.close(4001, 'room locked');
+      } catch (e) {
+        // 忽略关闭失败
+      }
+    }
   }
 
   private handleWebSocket(request: Request): Response {

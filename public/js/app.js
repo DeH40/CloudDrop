@@ -846,6 +846,10 @@ class CloudDrop {
         ui.updateConnectionStatus('disconnected');
         ui.showToast(event.code === 4001 ? i18n.t('room.passwordRequired') : i18n.t('room.passwordError'), 'error');
         this.clearRoomPassword();
+        // 关闭旧 P2P 连接并清空设备列表：房间已被锁定，旧链路全部作废
+        this.webrtc?.closeAll();
+        this.peers.clear();
+        ui.clearPeersGrid(document.getElementById('peersGrid'));
         // Show join room modal again with password input
         if (this.roomCode) {
           ui.showJoinRoomModal(this.roomCode);
@@ -1157,8 +1161,12 @@ class CloudDrop {
         }
         break;
       case 'room-locked':
-        // 房间里其他人设置了密码：清理本地状态，提示重新输入密码加入
+        // 房间里其他人设置了密码：清理本地状态，作废旧 P2P 链路，
+        // 提示重新输入密码加入
         this.clearRoomPassword();
+        this.webrtc?.closeAll();
+        this.peers.clear();
+        ui.clearPeersGrid(document.getElementById('peersGrid'));
         ui.showToast(i18n.t('room.roomLockedByOther'), 'warning');
         if (this.roomCode) {
           ui.showJoinRoomModal(this.roomCode, true);
@@ -1330,7 +1338,7 @@ class CloudDrop {
   /**
    * Accept file and trust the sending device for future transfers
    */
-  acceptAndTrustDevice() {
+  async acceptAndTrustDevice() {
     if (!this.pendingFileRequest) return;
 
     const { peerId } = this.pendingFileRequest;
@@ -1402,7 +1410,7 @@ class CloudDrop {
     const peer = this.peers.get(peerId);
     if (!peer) return;
 
-    const info = await cryptoManager.computeFullVerification(peerId);
+    const info = await cryptoManager.computeFullVerification(peerId, peer.deviceKey);
     if (!info) {
       ui.showToast(i18n.t('transfer.safetyCodeUnavailable'), 'warning');
       return;
@@ -1418,7 +1426,8 @@ class CloudDrop {
    */
   async updatePeerSafetyCode(peerId) {
     try {
-      const code = await cryptoManager.computeSafetyCode(peerId);
+      const peer = this.peers.get(peerId);
+      const code = await cryptoManager.computeSafetyCode(peerId, peer?.deviceKey || null);
       if (code) ui.updatePeerSafetyCode(peerId, code);
     } catch (e) {
       console.warn('[App] 安全码计算失败:', e);

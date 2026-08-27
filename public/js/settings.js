@@ -134,23 +134,20 @@ export const SettingsMixin = {
 
   /**
    * 设备密钥变化检测：同名 + 同浏览器信息但公钥指纹与已信任记录不一致，
-   * 说明设备密钥可能已更换（重装/被替换）——撤销旧信任并返回 true。
+   * 提示用户重新验证。注意：不自动删除旧信任记录——名称/浏览器信息可被
+   * 同房间攻击者伪造，自动撤销会变成信任 DoS；由用户在弹窗中人工处理。
    */
   async detectKeyChange(peer) {
     const fingerprint = await this.getDeviceFingerprint(peer);
     if (!fingerprint) return false;
 
-    let changed = false;
     for (const [oldFp, info] of this.trustedDevices.entries()) {
       if (oldFp === fingerprint) continue;
       if (info.name === peer.name && info.browserInfo === (peer.browserInfo || '')) {
-        // 同名同指纹来源的设备换了密钥：取消原信任
-        this.trustedDevices.delete(oldFp);
-        changed = true;
+        return true;
       }
     }
-    if (changed) this.saveTrustedDevices();
-    return changed;
+    return false;
   },
 
   async trustDevice(peer) {
@@ -264,7 +261,7 @@ export const SettingsMixin = {
           </div>
           <div class="trusted-device-details">
             <div class="trusted-device-name">${ui.escapeHtml(device.name)}</div>
-            <div class="trusted-device-meta">${device.browserInfo || i18n.t('settings.unknownBrowser')}</div>
+            <div class="trusted-device-meta">${ui.escapeHtml(device.browserInfo || '') || i18n.t('settings.unknownBrowser')}</div>
           </div>
         </div>
         <button class="btn-untrust" title="${i18n.t('settings.untrust')}" data-fingerprint="${device.fingerprint}">

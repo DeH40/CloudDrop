@@ -24,9 +24,9 @@ jobs:
       - name: TypeScript check
         run: npx tsc --noEmit
 
-      - name: JS syntax check (frontend)
+      - name: JS syntax check (frontend, ESM)
         run: |
-          for f in public/js/*.js; do node --check "$f" || exit 1; done
+          for f in public/js/*.js; do node --input-type=module --check < "$f" || exit 1; done
 
       - name: Unit tests (node:test)
         run: npm test

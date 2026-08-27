@@ -36,8 +36,8 @@ export const DEFAULT_SETTINGS = {
 // WebRTC Connection Configuration
 // =============================================================================
 export const WEBRTC = {
-  // File transfer chunk size
-  CHUNK_SIZE: 64 * 1024, // 64KB chunks
+  // File transfer chunk size（63KB：加密+AES-GCM tag+IV 后仍低于 SCTP 64KiB 上限）
+  CHUNK_SIZE: 63 * 1024,
 
   // Connection timeouts
   CONNECTION_TIMEOUT: 10000,        // 10 seconds ultimate timeout - only reached when
