@@ -4,6 +4,7 @@
 
 // Import i18n for dynamic content translation
 import { i18n } from './i18n.js';
+import { debugLog } from './logger.js';
 
 // Export i18n for use in other modules
 export { i18n };
@@ -267,7 +268,7 @@ export function triggerNotification(type = 'file') {
  */
 export async function requestNotificationPermission() {
   if (!('Notification' in window)) {
-    console.log('[UI] Browser does not support notifications');
+    debugLog('[UI] Browser does not support notifications');
     return false;
   }
 
@@ -295,13 +296,13 @@ export async function requestNotificationPermission() {
 export function showBrowserNotification(options = {}) {
   // Check if notifications are supported
   if (!('Notification' in window)) {
-    console.log('[UI] Browser does not support notifications');
+    debugLog('[UI] Browser does not support notifications');
     return;
   }
 
   // Check if permission is granted
   if (Notification.permission !== 'granted') {
-    console.log('[UI] Notification permission not granted');
+    debugLog('[UI] Notification permission not granted');
     return;
   }
 

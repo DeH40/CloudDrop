@@ -7,6 +7,7 @@ import { cryptoManager } from './crypto.js';
 import * as ui from './ui.js';
 import { STORAGE_KEYS, ROOM, DEFAULT_SETTINGS, ERROR_CODES } from './config.js';
 import { i18n } from './i18n.js';
+import { debugLog } from './logger.js';
 
 class CloudDrop {
   constructor() {
@@ -487,7 +488,7 @@ class CloudDrop {
       // Update security badge
       this.updateRoomSecurityBadge();
 
-      console.log('[App] Secure room created:', roomCode);
+      debugLog('[App] Secure room created:', roomCode);
       return true;
     } catch (error) {
       console.error('[App] Failed to create secure room:', error);
@@ -541,7 +542,7 @@ class CloudDrop {
       // Update security badge
       this.updateRoomSecurityBadge();
 
-      console.log('[App] Joining secure room:', normalizedRoomCode);
+      debugLog('[App] Joining secure room:', normalizedRoomCode);
       return true;
     } catch (error) {
       console.error('[App] Failed to prepare for secure room:', error);
@@ -559,7 +560,7 @@ class CloudDrop {
     this.isSecureRoom = false;
     cryptoManager.clearRoomPassword();
     this.updateRoomSecurityBadge();
-    console.log('[App] Room password cleared');
+    debugLog('[App] Room password cleared');
   }
 
   async init() {
@@ -622,22 +623,22 @@ class CloudDrop {
     if (this.settings.enableNotifications) {
       // Check if browser supports notifications
       if (!('Notification' in window)) {
-        console.log('[App] Browser does not support notifications, disabling setting');
+        debugLog('[App] Browser does not support notifications, disabling setting');
         this.updateSetting('enableNotifications', false);
         return;
       }
 
       // If permission is not granted, try to request it
       if (Notification.permission !== 'granted') {
-        console.log('[App] Notification enabled but no permission, requesting...');
+        debugLog('[App] Notification enabled but no permission, requesting...');
         const granted = await ui.requestNotificationPermission();
 
         // If permission denied, disable the setting
         if (!granted) {
-          console.log('[App] Notification permission denied, disabling setting');
+          debugLog('[App] Notification permission denied, disabling setting');
           this.updateSetting('enableNotifications', false);
         } else {
-          console.log('[App] Notification permission granted');
+          debugLog('[App] Notification permission granted');
         }
       }
     }
@@ -1220,7 +1221,7 @@ class CloudDrop {
   }
 
   handleSignaling(msg) {
-    console.log('[Signaling] Received:', msg.type, msg);
+    debugLog('[Signaling] Received:', msg.type, msg);
     switch (msg.type) {
       case 'auth-success':
         // Authentication successful, now join the room
@@ -1233,14 +1234,14 @@ class CloudDrop {
           clearTimeout(this._secureJoinTimeout);
           this._secureJoinTimeout = null;
         }
-        console.log('[Signaling] My peer ID:', this.peerId);
+        debugLog('[Signaling] My peer ID:', this.peerId);
         // Set peer ID for Perfect Negotiation pattern
         this.webrtc.setMyPeerId(this.peerId);
         // Update room code from server if auto-assigned
         if (msg.roomCode) {
           this.roomCode = msg.roomCode;
           this.updateRoomDisplay();
-          console.log('[Signaling] Room code:', this.roomCode);
+          debugLog('[Signaling] Room code:', this.roomCode);
         }
         msg.peers?.forEach(p => this.addPeer(p));
 
@@ -1324,7 +1325,7 @@ class CloudDrop {
       // 密钥指纹信任：先验证对方确实持有设备私钥，防公钥抄袭伪造
       const verified = await this.verifyPeerIdentity(peer);
       if (verified) {
-        console.log(`[App] Auto-accepting file from trusted device: ${peer.name}`);
+        debugLog(`[App] Auto-accepting file from trusted device: ${peer.name}`);
         ui.showToast(i18n.t('toast.autoAccepting', { name: peer.name, file: displayName }), 'info');
         this.acceptFileRequest(request);
         return;

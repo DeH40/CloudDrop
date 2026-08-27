@@ -1,3 +1,5 @@
+import { debugLog } from './logger.js';
+
 /**
  * CloudDrop - End-to-End Encryption Module
  * Implements ECDH key exchange + AES-256-GCM encryption
@@ -469,7 +471,7 @@ export class CryptoManager {
 
     this.roomKey = await this.deriveRoomKeyFromPassword(password, roomCode);
     this.roomPasswordSet = true;
-    console.log('[Crypto] Room password set, encryption enabled');
+    debugLog('[Crypto] Room password set, encryption enabled');
   }
 
   /**
@@ -478,7 +480,7 @@ export class CryptoManager {
   clearRoomPassword() {
     this.roomKey = null;
     this.roomPasswordSet = false;
-    console.log('[Crypto] Room password cleared');
+    debugLog('[Crypto] Room password cleared');
   }
 
   /**

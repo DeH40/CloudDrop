@@ -1,3 +1,5 @@
+import { debugLog } from './logger.js';
+
 /**
  * CloudDrop - i18n (Internationalization) Module
  * Lightweight i18n implementation without external dependencies
@@ -98,13 +100,13 @@ export class I18n {
         throw new Error(`Failed to load ${locale}.json`);
       }
       this.translations[locale] = await response.json();
-      console.log(`[i18n] Loaded locale: ${locale}`);
+      debugLog(`[i18n] Loaded locale: ${locale}`);
     } catch (error) {
       console.error(`[i18n] Error loading locale ${locale}:`, error);
 
       // Try loading fallback locale if current locale fails
       if (locale !== this.fallbackLocale) {
-        console.log(`[i18n] Loading fallback locale: ${this.fallbackLocale}`);
+        debugLog(`[i18n] Loading fallback locale: ${this.fallbackLocale}`);
         try {
           const fallbackResponse = await fetch(`/locales/${this.fallbackLocale}.json`);
           this.translations[this.fallbackLocale] = await fallbackResponse.json();
@@ -450,7 +452,7 @@ export class I18n {
     // Emit custom event for other components to react
     window.dispatchEvent(new CustomEvent('localeChanged', { detail: { locale: newLocale } }));
 
-    console.log(`[i18n] Locale changed to: ${newLocale}`);
+    debugLog(`[i18n] Locale changed to: ${newLocale}`);
   }
 
   /**

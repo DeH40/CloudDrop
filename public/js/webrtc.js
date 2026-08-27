@@ -12,6 +12,7 @@
 
 import { cryptoManager } from './crypto.js';
 import { chunkStore } from './chunkStore.js';
+import { debugLog } from './logger.js';
 import { WEBRTC, P2P_RETRY, RELAY, ERROR_CODES } from './config.js';
 import { i18n } from './i18n.js';
 
@@ -163,7 +164,7 @@ async function rankIceServers(iceServers) {
     }
   }
 
-  console.log(`[WebRTC] Checking ${stunServers.length} STUN servers...`);
+  debugLog(`[WebRTC] Checking ${stunServers.length} STUN servers...`);
 
   // Check all STUN servers in parallel
   const healthChecks = stunServers.map(async (server) => {
@@ -179,18 +180,18 @@ async function rankIceServers(iceServers) {
     .filter(r => r.result !== null)
     .sort((a, b) => a.result.latency - b.result.latency)
     .map(r => {
-      console.log(`[WebRTC] STUN ${r.result.url} responded in ${r.result.latency}ms`);
+      debugLog(`[WebRTC] STUN ${r.result.url} responded in ${r.result.latency}ms`);
       return r.server;
     });
 
   const failedCount = results.filter(r => r.result === null).length;
   if (failedCount > 0) {
-    console.log(`[WebRTC] ${failedCount} STUN servers unreachable`);
+    debugLog(`[WebRTC] ${failedCount} STUN servers unreachable`);
   }
 
   // TURN servers come first (they're more reliable), then sorted STUN
   const ranked = [...turnServers, ...rankedStun];
-  console.log(`[WebRTC] ICE servers ranked: ${ranked.length} available`);
+  debugLog(`[WebRTC] ICE servers ranked: ${ranked.length} available`);
 
   return ranked.length > 0 ? ranked : FALLBACK_ICE_SERVERS;
 }
@@ -219,7 +220,7 @@ async function fetchIceServers(forceRefresh = false) {
         if (parsed && Array.isArray(parsed.servers) && (now - parsed.timestamp) < ICE_SERVERS_CACHE_TTL * 6) {
           cachedIceServers = parsed.servers;
           cachedIceServersTimestamp = parsed.timestamp;
-          console.log(`[WebRTC] Reusing ICE servers from sessionStorage (${parsed.servers.length} servers)`);
+          debugLog(`[WebRTC] Reusing ICE servers from sessionStorage (${parsed.servers.length} servers)`);
           return cachedIceServers;
         }
       }
@@ -241,7 +242,7 @@ async function fetchIceServers(forceRefresh = false) {
 
       if (response.ok) {
         const data = await response.json();
-        console.log(`[WebRTC] Fetched ${data.iceServers.length} ICE servers from server`);
+        debugLog(`[WebRTC] Fetched ${data.iceServers.length} ICE servers from server`);
 
         // Rank servers by health check
         const rankedServers = await rankIceServers(data.iceServers);
@@ -366,17 +367,17 @@ export class WebRTCManager {
     setTimeout(async () => {
       // Only prewarm if no active connection/attempt exists
       if (!this.connections.has(peerId) && !this.pendingConnections.has(peerId) && !this.relayMode.get(peerId)) {
-        console.log(`[WebRTC] Prewarming connection to ${peerId}`);
+        debugLog(`[WebRTC] Prewarming connection to ${peerId}`);
 
         try {
           // Try P2P with fast timeout - if it fails, switch to relay SILENTLY
           // so the first message/file can go out instantly instead of re-racing
           const result = await this._raceP2PWithFallbackSilent(peerId);
-          console.log(`[WebRTC] Prewarm result for ${peerId}: ${result}`);
+          debugLog(`[WebRTC] Prewarm result for ${peerId}: ${result}`);
         } catch (err) {
           // Prewarm failure (e.g. relay fallback disabled) - just log
           // Actual file transfer will make its own decision
-          console.log(`[WebRTC] Prewarm failed for ${peerId}: ${err.message} (will retry on actual transfer)`);
+          debugLog(`[WebRTC] Prewarm failed for ${peerId}: ${err.message} (will retry on actual transfer)`);
         }
       }
     }, 300 + Math.random() * 300); // Stagger prewarm requests
@@ -395,7 +396,7 @@ export class WebRTCManager {
    */
   setRelayFallbackEnabled(enabled) {
     this.relayFallbackEnabled = enabled;
-    console.log(`[WebRTC] Relay fallback ${enabled ? 'enabled' : 'disabled'}`);
+    debugLog(`[WebRTC] Relay fallback ${enabled ? 'enabled' : 'disabled'}`);
   }
 
   /**
@@ -405,7 +406,7 @@ export class WebRTCManager {
   setRelayFallbackTimeout(seconds) {
     // 更新配置中的快速降级超时
     this.relayFallbackTimeout = seconds * 1000; // 转换为毫秒
-    console.log(`[WebRTC] Relay fallback timeout set to ${seconds}s`);
+    debugLog(`[WebRTC] Relay fallback timeout set to ${seconds}s`);
   }
 
   /**
@@ -423,7 +424,7 @@ export class WebRTCManager {
    */
   setMyPeerId(peerId) {
     this._myPeerId = peerId;
-    console.log(`[WebRTC] My peer ID set to: ${peerId}`);
+    debugLog(`[WebRTC] My peer ID set to: ${peerId}`);
   }
 
   // Create connection to peer with enhanced configuration
@@ -436,7 +437,7 @@ export class WebRTCManager {
 
     // Return pending connection promise if one is already in progress
     if (this.pendingConnections.has(peerId)) {
-      console.log(`[WebRTC] Connection to ${peerId} already in progress, waiting...`);
+      debugLog(`[WebRTC] Connection to ${peerId} already in progress, waiting...`);
       return this.pendingConnections.get(peerId);
     }
 
@@ -467,14 +468,14 @@ export class WebRTCManager {
             // Track candidate types for smart fallback decisions
             const candidateType = e.candidate.type; // 'host', 'srflx', 'relay'
             this.candidateTypes.get(peerId)?.add(candidateType);
-            console.log(`[WebRTC] ICE candidate (${candidateType}) for ${peerId}`);
+            debugLog(`[WebRTC] ICE candidate (${candidateType}) for ${peerId}`);
 
             // Update connection quality prediction
             this._updateConnectionQuality(peerId);
 
             this.signaling.send({ type: 'ice-candidate', to: peerId, data: e.candidate });
           } else {
-            console.log(`[WebRTC] ICE gathering completed for ${peerId}`);
+            debugLog(`[WebRTC] ICE gathering completed for ${peerId}`);
             this._finalizeConnectionQuality(peerId);
           }
         };
@@ -486,30 +487,30 @@ export class WebRTCManager {
 
         // ICE gathering state
         pc.onicegatheringstatechange = () => {
-          console.log(`[WebRTC] ICE gathering state with ${peerId}: ${pc.iceGatheringState}`);
+          debugLog(`[WebRTC] ICE gathering state with ${peerId}: ${pc.iceGatheringState}`);
         };
 
         // ICE connection state - handle disconnected/failed with restart
         pc.oniceconnectionstatechange = () => {
-          console.log(`[WebRTC] ICE connection state with ${peerId}: ${pc.iceConnectionState}`);
+          debugLog(`[WebRTC] ICE connection state with ${peerId}: ${pc.iceConnectionState}`);
           this._handleIceConnectionStateChange(peerId, pc);
         };
 
         // Connection state
         pc.onconnectionstatechange = () => {
-          console.log(`[WebRTC] Connection state with ${peerId}: ${pc.connectionState}`);
+          debugLog(`[WebRTC] Connection state with ${peerId}: ${pc.connectionState}`);
           this._handleConnectionStateChange(peerId, pc);
         };
 
         // Negotiation needed - log only, don't auto-handle
         // We manually control signaling via createOffer
         pc.onnegotiationneeded = () => {
-          console.log(`[WebRTC] Negotiation needed with ${peerId} (handled manually)`);
+          debugLog(`[WebRTC] Negotiation needed with ${peerId} (handled manually)`);
         };
 
         // Data channel received
         pc.ondatachannel = (e) => {
-          console.log(`[WebRTC] Received data channel from ${peerId}`);
+          debugLog(`[WebRTC] Received data channel from ${peerId}`);
           this.setupDataChannel(peerId, e.channel);
         };
 
@@ -553,7 +554,7 @@ export class WebRTCManager {
     };
 
     this.connectionQuality.set(peerId, quality);
-    console.log(`[WebRTC] Connection quality for ${peerId}:`, quality);
+    debugLog(`[WebRTC] Connection quality for ${peerId}:`, quality);
   }
 
   /**
@@ -567,7 +568,7 @@ export class WebRTCManager {
       console.warn(`[WebRTC] No ICE candidates gathered for ${peerId} - network issue`);
       this.connectionQuality.set(peerId, { p2pPossible: false, hasRelay: false, networkIssue: true });
     } else if (!quality?.p2pPossible && quality?.hasRelay) {
-      console.log(`[WebRTC] Only relay candidates for ${peerId} - will use relay`);
+      debugLog(`[WebRTC] Only relay candidates for ${peerId} - will use relay`);
     }
   }
 
@@ -610,10 +611,10 @@ export class WebRTCManager {
 
     if (state === 'disconnected') {
       // Wait before treating as failed - may recover
-      console.log(`[WebRTC] ICE disconnected with ${peerId}, waiting for recovery...`);
+      debugLog(`[WebRTC] ICE disconnected with ${peerId}, waiting for recovery...`);
       const timer = setTimeout(() => {
         if (pc.iceConnectionState === 'disconnected') {
-          console.log(`[WebRTC] ICE still disconnected, fast-switching to relay...`);
+          debugLog(`[WebRTC] ICE still disconnected, fast-switching to relay...`);
           // Silent switch if already in background recovery mode or during silent prewarm race
           const racing = this.connectionRacing.get(peerId);
           const isSilentRace = !!(racing && racing.silent && !racing.resolved);
@@ -629,10 +630,10 @@ export class WebRTCManager {
       // Attempt ICE restart if P2P is possible (has any non-relay candidates) and we haven't exhausted restarts
       // Use p2pPossible instead of p2pLikely to give host-only connections (LAN) a chance too
       if (quality?.p2pPossible && restartCount < MAX_ICE_RESTARTS) {
-        console.log(`[WebRTC] ICE failed with ${peerId}, attempting restart ${restartCount + 1}/${MAX_ICE_RESTARTS}...`);
+        debugLog(`[WebRTC] ICE failed with ${peerId}, attempting restart ${restartCount + 1}/${MAX_ICE_RESTARTS}...`);
         this._attemptIceRestart(peerId, pc);
       } else {
-        console.log(`[WebRTC] ICE failed for ${peerId} (restarts: ${restartCount}/${MAX_ICE_RESTARTS}, p2pPossible: ${quality?.p2pPossible}), switching to relay`);
+        debugLog(`[WebRTC] ICE failed for ${peerId} (restarts: ${restartCount}/${MAX_ICE_RESTARTS}, p2pPossible: ${quality?.p2pPossible}), switching to relay`);
         // Silent switch if already in background recovery mode or during silent prewarm race
         const racing = this.connectionRacing.get(peerId);
         const isSilentRace = !!(racing && racing.silent && !racing.resolved);
@@ -644,7 +645,7 @@ export class WebRTCManager {
       // NOTE: do NOT clear relay mode here - only a fully opened data channel
       // (setupDataChannel.onopen) upgrades the connection back to P2P.
       // Clearing too early can strand the peer with neither P2P nor relay.
-      console.log(`[WebRTC] ICE connected with ${peerId}`);
+      debugLog(`[WebRTC] ICE connected with ${peerId}`);
     }
   }
 
@@ -662,7 +663,7 @@ export class WebRTCManager {
       // Always update the badge, but only show toast if not silent
       // Pass null message when silent to update badge without toast
       this._notifyConnectionState(peerId, 'relay', silent ? null : message);
-      console.log(`[WebRTC] Switched to relay mode for ${peerId}`);
+      debugLog(`[WebRTC] Switched to relay mode for ${peerId}`);
 
       // Resolve any pending connection with relay mode
       const racing = this.connectionRacing.get(peerId);
@@ -681,7 +682,7 @@ export class WebRTCManager {
       this._prewarmEncryptionKeys(peerId);
     } else {
       // Already in relay mode - just log, no notification
-      console.log(`[WebRTC] Already in relay mode for ${peerId}, skipping notification`);
+      debugLog(`[WebRTC] Already in relay mode for ${peerId}, skipping notification`);
     }
   }
 
@@ -702,7 +703,7 @@ export class WebRTCManager {
     }, P2P_RETRY_INITIAL_DELAY);
 
     this.p2pRetryTimers.set(peerId, timerId);
-    console.log(`[WebRTC] Started background P2P retry for ${peerId}`);
+    debugLog(`[WebRTC] Started background P2P retry for ${peerId}`);
   }
 
   /**
@@ -725,7 +726,7 @@ export class WebRTCManager {
   async _attemptSilentP2PReconnect(peerId) {
     // Check if still in relay mode (peer might have left or P2P already restored)
     if (!this.relayMode.get(peerId)) {
-      console.log(`[WebRTC] P2P retry cancelled for ${peerId} - no longer in relay mode`);
+      debugLog(`[WebRTC] P2P retry cancelled for ${peerId} - no longer in relay mode`);
       this._stopBackgroundP2PRetry(peerId);
       return;
     }
@@ -735,12 +736,12 @@ export class WebRTCManager {
 
     // Check if exceeded max attempts
     if (attempts > P2P_RETRY_MAX_ATTEMPTS) {
-      console.log(`[WebRTC] P2P retry max attempts (${P2P_RETRY_MAX_ATTEMPTS}) reached for ${peerId}`);
+      debugLog(`[WebRTC] P2P retry max attempts (${P2P_RETRY_MAX_ATTEMPTS}) reached for ${peerId}`);
       this._stopBackgroundP2PRetry(peerId);
       return;
     }
 
-    console.log(`[WebRTC] Attempting silent P2P reconnect for ${peerId} (attempt ${attempts}/${P2P_RETRY_MAX_ATTEMPTS})`);
+    debugLog(`[WebRTC] Attempting silent P2P reconnect for ${peerId} (attempt ${attempts}/${P2P_RETRY_MAX_ATTEMPTS})`);
 
     try {
       // Close existing connection if any
@@ -769,7 +770,7 @@ export class WebRTCManager {
       await this._attemptP2PConnectionSilent(peerId);
 
       // If we get here, P2P succeeded!
-      console.log(`[WebRTC] Background P2P reconnect succeeded for ${peerId}`);
+      debugLog(`[WebRTC] Background P2P reconnect succeeded for ${peerId}`);
 
       // Switch back to P2P mode
       this.relayMode.delete(peerId);
@@ -779,7 +780,7 @@ export class WebRTCManager {
       this._notifyConnectionState(peerId, 'connected', null);
 
     } catch (err) {
-      console.log(`[WebRTC] Background P2P retry failed for ${peerId}: ${err.message}`);
+      debugLog(`[WebRTC] Background P2P retry failed for ${peerId}: ${err.message}`);
 
       // Schedule next retry if still in relay mode
       if (this.relayMode.get(peerId)) {
@@ -788,7 +789,7 @@ export class WebRTCManager {
         }, P2P_RETRY_INTERVAL);
 
         this.p2pRetryTimers.set(peerId, timerId);
-        console.log(`[WebRTC] Next P2P retry scheduled in ${P2P_RETRY_INTERVAL / 1000}s`);
+        debugLog(`[WebRTC] Next P2P retry scheduled in ${P2P_RETRY_INTERVAL / 1000}s`);
       }
     }
   }
@@ -806,7 +807,7 @@ export class WebRTCManager {
       // Check if we should try ICE restart or give up
       const restartCount = this.iceRestartCounts.get(peerId) || 0;
       if (restartCount >= MAX_ICE_RESTARTS) {
-        console.log(`[WebRTC] Connection failed after ${restartCount} restarts, closing`);
+        debugLog(`[WebRTC] Connection failed after ${restartCount} restarts, closing`);
         // If we're in relay mode, keep relay active - only clean up the dead P2P attempt
         this.closeConnection(peerId, this.relayMode.get(peerId));
       }
@@ -823,12 +824,12 @@ export class WebRTCManager {
     const restartCount = this.iceRestartCounts.get(peerId) || 0;
 
     if (restartCount >= MAX_ICE_RESTARTS) {
-      console.log(`[WebRTC] Max ICE restarts (${MAX_ICE_RESTARTS}) reached for ${peerId}`);
+      debugLog(`[WebRTC] Max ICE restarts (${MAX_ICE_RESTARTS}) reached for ${peerId}`);
       return;
     }
 
     this.iceRestartCounts.set(peerId, restartCount + 1);
-    console.log(`[WebRTC] Attempting ICE restart ${restartCount + 1}/${MAX_ICE_RESTARTS} for ${peerId}`);
+    debugLog(`[WebRTC] Attempting ICE restart ${restartCount + 1}/${MAX_ICE_RESTARTS} for ${peerId}`);
 
     try {
       // Wait a bit before restart
@@ -845,7 +846,7 @@ export class WebRTCManager {
         data: { sdp: offer, publicKey, iceRestart: true }
       });
 
-      console.log(`[WebRTC] ICE restart offer sent to ${peerId}`);
+      debugLog(`[WebRTC] ICE restart offer sent to ${peerId}`);
     } catch (e) {
       console.error(`[WebRTC] ICE restart failed for ${peerId}:`, e);
     }
@@ -857,7 +858,7 @@ export class WebRTCManager {
   async _flushPendingCandidates(peerId, pc) {
     const pending = this.pendingCandidates.get(peerId);
     if (pending && pending.length > 0) {
-      console.log(`[WebRTC] Flushing ${pending.length} pending ICE candidates for ${peerId}`);
+      debugLog(`[WebRTC] Flushing ${pending.length} pending ICE candidates for ${peerId}`);
       for (const candidate of pending) {
         try {
           await pc.addIceCandidate(new RTCIceCandidate(candidate));
@@ -875,7 +876,7 @@ export class WebRTCManager {
     this.dataChannels.set(peerId, channel);
 
     channel.onopen = () => {
-      console.log(`[WebRTC] DataChannel opened with ${peerId}`);
+      debugLog(`[WebRTC] DataChannel opened with ${peerId}`);
       // Wake up any waitForChannel() waiters
       this._resolveChannelWaiters(peerId);
       // Reset relay mode when direct channel opens
@@ -889,7 +890,7 @@ export class WebRTCManager {
     channel.onmessage = (e) => this.handleMessage(peerId, e.data);
 
     channel.onclose = () => {
-      console.log(`[WebRTC] DataChannel closed with ${peerId}`);
+      debugLog(`[WebRTC] DataChannel closed with ${peerId}`);
       this.dataChannels.delete(peerId);
     };
 
@@ -923,7 +924,7 @@ export class WebRTCManager {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      console.log(`[WebRTC] Sending offer to ${peerId}`);
+      debugLog(`[WebRTC] Sending offer to ${peerId}`);
       this.signaling.send({
         type: 'offer',
         to: peerId,
@@ -942,7 +943,7 @@ export class WebRTCManager {
 
   // Handle offer with Perfect Negotiation
   async handleOffer(peerId, data) {
-    console.log(`[WebRTC] Received offer from ${peerId}`);
+    debugLog(`[WebRTC] Received offer from ${peerId}`);
 
     // Update badge only (no toast) for incoming offers
     // Toast is only shown when user actively initiates a transfer
@@ -965,14 +966,14 @@ export class WebRTCManager {
     this.ignoreOffer.set(peerId, !isPolite && offerCollision);
 
     if (this.ignoreOffer.get(peerId)) {
-      console.log(`[WebRTC] Ignoring offer from ${peerId} due to collision (impolite peer)`);
+      debugLog(`[WebRTC] Ignoring offer from ${peerId} due to collision (impolite peer)`);
       return;
     }
 
     try {
       // If we're in have-local-offer state, we need to rollback first (polite peer)
       if (pc.signalingState === 'have-local-offer') {
-        console.log(`[WebRTC] Rolling back local offer for ${peerId}`);
+        debugLog(`[WebRTC] Rolling back local offer for ${peerId}`);
         await pc.setLocalDescription({ type: 'rollback' });
       }
 
@@ -991,7 +992,7 @@ export class WebRTCManager {
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
 
-      console.log(`[WebRTC] Sending answer to ${peerId}`);
+      debugLog(`[WebRTC] Sending answer to ${peerId}`);
       this.signaling.send({
         type: 'answer',
         to: peerId,
@@ -1004,7 +1005,7 @@ export class WebRTCManager {
 
   // Handle answer
   async handleAnswer(peerId, data) {
-    console.log(`[WebRTC] Received answer from ${peerId}`);
+    debugLog(`[WebRTC] Received answer from ${peerId}`);
     const pc = this.connections.get(peerId);
 
     if (!pc) {
@@ -1030,7 +1031,7 @@ export class WebRTCManager {
         await cryptoManager.importPeerPublicKey(peerId, data.publicKey);
         this._resolveKeyWaiters(peerId);
         if (this.onPeerKeyReady) this.onPeerKeyReady(peerId);
-        console.log(`[WebRTC] Imported public key from ${peerId}`);
+        debugLog(`[WebRTC] Imported public key from ${peerId}`);
       }
     } catch (e) {
       console.error(`[WebRTC] Error handling answer from ${peerId}:`, e);
@@ -1045,7 +1046,7 @@ export class WebRTCManager {
     if (pc && pc.remoteDescription && pc.remoteDescription.type) {
       try {
         await pc.addIceCandidate(new RTCIceCandidate(candidate));
-        console.log(`[WebRTC] Added ICE candidate from ${peerId}`);
+        debugLog(`[WebRTC] Added ICE candidate from ${peerId}`);
         return;
       } catch (e) {
         console.warn(`[WebRTC] Error adding ICE candidate: ${e.message}`);
@@ -1055,7 +1056,7 @@ export class WebRTCManager {
     }
 
     // Buffer candidate only if remote description not yet set
-    console.log(`[WebRTC] Buffering ICE candidate from ${peerId} (no remote desc yet)`);
+    debugLog(`[WebRTC] Buffering ICE candidate from ${peerId} (no remote desc yet)`);
     if (!this.pendingCandidates.has(peerId)) {
       this.pendingCandidates.set(peerId, []);
     }
@@ -1077,7 +1078,7 @@ export class WebRTCManager {
     }
 
     // Step 1: Send file request and wait for confirmation
-    console.log(`[WebRTC] Requesting file transfer permission from ${peerId}`);
+    debugLog(`[WebRTC] Requesting file transfer permission from ${peerId}`);
     const accepted = await this._requestFileTransfer(peerId, file, fileId, isRelayMode);
 
     if (!accepted) {
@@ -1086,19 +1087,19 @@ export class WebRTCManager {
 
     // Step 2: Actually transfer the file
     if (isRelayMode) {
-      console.log(`[WebRTC] Sending file to ${peerId} via relay`);
+      debugLog(`[WebRTC] Sending file to ${peerId} via relay`);
       return this._sendFileDataViaRelay(peerId, file, fileId);
     }
 
     // Verify we have a working P2P channel
     const dc = this.dataChannels.get(peerId);
     if (!dc || dc.readyState !== 'open') {
-      console.log(`[WebRTC] No P2P channel available, using relay for ${peerId}`);
+      debugLog(`[WebRTC] No P2P channel available, using relay for ${peerId}`);
       this._switchToRelay(peerId, null, true);
       return this._sendFileDataViaRelay(peerId, file, fileId);
     }
 
-    console.log(`[WebRTC] Sending file to ${peerId} via P2P`);
+    debugLog(`[WebRTC] Sending file to ${peerId} via P2P`);
     return this._sendFileDataViaP2P(peerId, file, fileId, dc);
   }
 
@@ -1123,7 +1124,7 @@ export class WebRTCManager {
     }));
 
     // Step 1: Send one batch request and wait for a single confirmation
-    console.log(`[WebRTC] Requesting batch transfer permission (${files.length} files) from ${peerId}`);
+    debugLog(`[WebRTC] Requesting batch transfer permission (${files.length} files) from ${peerId}`);
     const accepted = await this._requestFileTransferBatch(peerId, metas);
 
     if (!accepted) {
@@ -1140,17 +1141,17 @@ export class WebRTCManager {
       }
 
       if (isRelayMode) {
-        console.log(`[WebRTC] Sending batch file ${i + 1}/${files.length} via relay: ${meta.name}`);
+        debugLog(`[WebRTC] Sending batch file ${i + 1}/${files.length} via relay: ${meta.name}`);
         await this._sendFileDataViaRelay(peerId, files[i], meta.fileId);
       } else {
         // Verify we have a working P2P channel
         const dc = this.dataChannels.get(peerId);
         if (!dc || dc.readyState !== 'open') {
-          console.log(`[WebRTC] No P2P channel for batch, using relay for ${meta.name}`);
+          debugLog(`[WebRTC] No P2P channel for batch, using relay for ${meta.name}`);
           this._switchToRelay(peerId, null, true);
           await this._sendFileDataViaRelay(peerId, files[i], meta.fileId);
         } else {
-          console.log(`[WebRTC] Sending batch file ${i + 1}/${files.length} via P2P: ${meta.name}`);
+          debugLog(`[WebRTC] Sending batch file ${i + 1}/${files.length} via P2P: ${meta.name}`);
           await this._sendFileDataViaP2P(peerId, files[i], meta.fileId, dc);
         }
       }
@@ -1245,7 +1246,7 @@ export class WebRTCManager {
    * Handle incoming file request (called by app.js)
    */
   handleFileRequest(peerId, data) {
-    console.log(`[WebRTC] Received file request from ${peerId}:`, data);
+    debugLog(`[WebRTC] Received file request from ${peerId}:`, data);
     // This is now handled by signaling, forwarded to onFileRequest callback
     if (this.onFileRequest) {
       this.onFileRequest(peerId, data);
@@ -1259,7 +1260,7 @@ export class WebRTCManager {
    * @param {boolean} accept - true to accept, false to decline
    */
   respondToFileRequest(peerId, fileId, accept) {
-    console.log(`[WebRTC] Responding to file request ${fileId}: ${accept ? 'accept' : 'decline'}`);
+    debugLog(`[WebRTC] Responding to file request ${fileId}: ${accept ? 'accept' : 'decline'}`);
 
     this.signaling.send({
       type: 'file-response',
@@ -1277,7 +1278,7 @@ export class WebRTCManager {
    * Handle file response (accept/decline from recipient)
    */
   handleFileResponse(peerId, data) {
-    console.log(`[WebRTC] Received file response from ${peerId}:`, data);
+    debugLog(`[WebRTC] Received file response from ${peerId}:`, data);
     const pending = this.pendingFileRequests.get(data.fileId);
 
     if (pending) {
@@ -1297,7 +1298,7 @@ export class WebRTCManager {
    * @param {string} reason - Optional reason for cancellation
    */
   cancelTransfer(fileId, peerId, reason = 'user') {
-    console.log(`[WebRTC] Cancelling transfer ${fileId} with ${peerId}, reason: ${reason}`);
+    debugLog(`[WebRTC] Cancelling transfer ${fileId} with ${peerId}, reason: ${reason}`);
 
     // Mark as cancelled in active transfers
     const transfer = this.activeTransfers.get(fileId);
@@ -1334,7 +1335,7 @@ export class WebRTCManager {
    * Handle incoming file cancel message
    */
   handleFileCancel(peerId, data) {
-    console.log(`[WebRTC] Received file cancel from ${peerId}:`, data);
+    debugLog(`[WebRTC] Received file cancel from ${peerId}:`, data);
 
     const { fileId, reason } = data;
 
@@ -1409,7 +1410,7 @@ export class WebRTCManager {
         // Check if transfer was cancelled
         const transfer = this.activeTransfers.get(fileId);
         if (!transfer || transfer.cancelled) {
-          console.log(`[WebRTC] Transfer ${fileId} was cancelled`);
+          debugLog(`[WebRTC] Transfer ${fileId} was cancelled`);
           throw new Error(ERROR_CODES.FILE_CANCELLED);
         }
 
@@ -1469,7 +1470,7 @@ export class WebRTCManager {
 
     // Ensure we have encryption key before sending
     if (!cryptoManager.hasSharedSecret(peerId)) {
-      console.log(`[WebRTC] No shared key for ${peerId}, exchanging keys via signaling...`);
+      debugLog(`[WebRTC] No shared key for ${peerId}, exchanging keys via signaling...`);
       await this._exchangeKeysViaSignaling(peerId);
     }
 
@@ -1496,7 +1497,7 @@ export class WebRTCManager {
         // Check if transfer was cancelled
         const transfer = this.activeTransfers.get(fileId);
         if (!transfer || transfer.cancelled) {
-          console.log(`[WebRTC] Relay transfer ${fileId} was cancelled`);
+          debugLog(`[WebRTC] Relay transfer ${fileId} was cancelled`);
           throw new Error(ERROR_CODES.FILE_CANCELLED);
         }
 
@@ -1512,7 +1513,7 @@ export class WebRTCManager {
                 console.error(`[WebRTC] Chunk ${index} failed after ${retries} retries`);
                 throw new Error(ERROR_CODES.TRANSFER_FAILED);
               }
-              console.log(`[WebRTC] Retransmitting chunk ${index}, retry ${retries + 1}`);
+              debugLog(`[WebRTC] Retransmitting chunk ${index}, retry ${retries + 1}`);
               this._sendChunk(peerId, fileId, index, data.base64, retries + 1);
               transfer.pendingChunks.get(index).retries = retries + 1;
               transfer.pendingChunks.get(index).sentAt = Date.now();
@@ -1586,7 +1587,7 @@ export class WebRTCManager {
         data: { type: 'file-end', fileId, totalChunks }
       });
 
-      console.log(`[WebRTC] Relay transfer complete: ${totalChunks} chunks sent`);
+      debugLog(`[WebRTC] Relay transfer complete: ${totalChunks} chunks sent`);
 
       // 等待接收方确认组装完成（批量发送顺序保障；兼容旧客户端超时放行）
       const ok = await this._waitForFileEndAck(fileId);
@@ -1647,7 +1648,7 @@ export class WebRTCManager {
     }
     transfer.lastAckTime = Date.now();
 
-    console.log(`[WebRTC] Received ACK for chunks: ${acks.join(',')}, pending: ${transfer.pendingChunks.size}`);
+    debugLog(`[WebRTC] Received ACK for chunks: ${acks.join(',')}, pending: ${transfer.pendingChunks.size}`);
   }
 
   /**
@@ -1701,7 +1702,7 @@ export class WebRTCManager {
     transfer.chunkCount = 0;
     if (transfer.useIdb) {
       transfer.chunks = null; // 不再驻留内存
-      console.log(`[WebRTC] 分块落盘已启用（IndexedDB）：${fileId}`);
+      debugLog(`[WebRTC] 分块落盘已启用（IndexedDB）：${fileId}`);
     } else {
       transfer.chunks = [];
     }
@@ -1722,7 +1723,7 @@ export class WebRTCManager {
           await this._initTransferStorage(existingTransfer, msg.fileId, msg.totalChunks);
           // Register as active transfer for cancellation support
           this.activeTransfers.set(msg.fileId, { peerId, direction: 'receive', cancelled: false });
-          console.log(`[WebRTC] Starting confirmed file transfer: ${msg.name}`);
+          debugLog(`[WebRTC] Starting confirmed file transfer: ${msg.name}`);
         } else {
           // Legacy flow or direct P2P without confirmation
           // Initialize new transfer
@@ -1736,7 +1737,7 @@ export class WebRTCManager {
           await this._initTransferStorage(transfer, msg.fileId, msg.totalChunks);
           // Register as active transfer
           this.activeTransfers.set(msg.fileId, { peerId, direction: 'receive', cancelled: false });
-          console.log(`[WebRTC] File transfer started (direct): ${msg.name}`);
+          debugLog(`[WebRTC] File transfer started (direct): ${msg.name}`);
         }
 
         // Notify for progress modal update
@@ -1833,7 +1834,7 @@ export class WebRTCManager {
   // Handle incoming relay data
   async handleRelayData(peerId, data) {
     if (!this.relayMode.get(peerId)) {
-      console.log(`[WebRTC] Received relay data from ${peerId}, switching to relay mode`);
+      debugLog(`[WebRTC] Received relay data from ${peerId}, switching to relay mode`);
       this.relayMode.set(peerId, true);
       // Notify UI that we're in relay mode (receiver side)
       // Update badge but no toast (null message)
@@ -1853,11 +1854,11 @@ export class WebRTCManager {
         existingTransfer.receivedIndices = new Set(); // Track received chunk indices
         // Register as active transfer for cancellation support
         this.activeTransfers.set(data.fileId, { peerId, direction: 'receive', cancelled: false });
-        console.log(`[WebRTC] Starting confirmed relay file transfer: ${data.name} (chunks reset)`);
+        debugLog(`[WebRTC] Starting confirmed relay file transfer: ${data.name} (chunks reset)`);
       } else {
         // Clean up any stale transfer first
         if (existingTransfer) {
-          console.log(`[WebRTC] Cleaning up stale transfer for peer ${peerId}`);
+          debugLog(`[WebRTC] Cleaning up stale transfer for peer ${peerId}`);
           if (existingTransfer.useIdb && existingTransfer.fileId) {
             chunkStore.deleteFile(existingTransfer.fileId).catch(() => {});
           }
@@ -1882,7 +1883,7 @@ export class WebRTCManager {
         await this._initTransferStorage(transfer, data.fileId, data.totalChunks);
         // Register as active transfer
         this.activeTransfers.set(data.fileId, { peerId, direction: 'receive', cancelled: false });
-        console.log(`[WebRTC] Relay file transfer started (direct): ${data.name}`);
+        debugLog(`[WebRTC] Relay file transfer started (direct): ${data.name}`);
       }
 
       // Notify for progress modal update
@@ -1926,13 +1927,13 @@ export class WebRTCManager {
 
         // Wait for in-flight chunks, then request retransmission of missing ones
         if (receivedCount < expectedCount) {
-          console.log(`[WebRTC] Waiting for in-flight chunks: ${receivedCount}/${expectedCount}`);
+          debugLog(`[WebRTC] Waiting for in-flight chunks: ${receivedCount}/${expectedCount}`);
           await waitForChunks(RELAY.RETRANSMIT_WAIT);
 
           for (let round = 0; round < RELAY.RETRANSMIT_ROUNDS && receivedCount < expectedCount; round++) {
             const missing = collectMissing();
             if (missing.length === 0) break;
-            console.log(`[WebRTC] Requesting retransmission of ${missing.length} chunks (round ${round + 1}/${RELAY.RETRANSMIT_ROUNDS})`);
+            debugLog(`[WebRTC] Requesting retransmission of ${missing.length} chunks (round ${round + 1}/${RELAY.RETRANSMIT_ROUNDS})`);
             this.signaling.send({
               type: 'relay-data',
               to: peerId,
@@ -1974,7 +1975,7 @@ export class WebRTCManager {
           blob = new Blob(orderedChunks, { type: transfer.mimeType || 'application/octet-stream' });
         }
 
-        console.log(`[WebRTC] Transfer complete: ${receivedCount}/${expectedCount} chunks, size: ${blob.size}`);
+        debugLog(`[WebRTC] Transfer complete: ${receivedCount}/${expectedCount} chunks, size: ${blob.size}`);
 
         // 告知发送方组装完成（批量顺序保障）
         this.signaling.send({
@@ -1992,7 +1993,7 @@ export class WebRTCManager {
       const transfer = this.activeTransfers.get(data.fileId);
       if (transfer && transfer.direction === 'send' && transfer.pendingChunks) {
         const missing = Array.isArray(data.missing) ? data.missing : [];
-        console.log(`[WebRTC] Retransmitting ${missing.length} chunks for ${data.fileId}`);
+        debugLog(`[WebRTC] Retransmitting ${missing.length} chunks for ${data.fileId}`);
         for (const index of missing) {
           const chunk = transfer.pendingChunks.get(index);
           if (chunk) {
@@ -2011,7 +2012,7 @@ export class WebRTCManager {
 
         // Skip duplicate chunks (from retransmission)
         if (transfer.receivedIndices && transfer.receivedIndices.has(chunkIndex)) {
-          console.log(`[WebRTC] Skipping duplicate chunk ${chunkIndex}`);
+          debugLog(`[WebRTC] Skipping duplicate chunk ${chunkIndex}`);
           // Still send ACK for duplicate to confirm receipt
           this._sendChunkAck(peerId, data.fileId, [chunkIndex]);
           return;
@@ -2082,20 +2083,20 @@ export class WebRTCManager {
 
     // Check if we're in relay mode after connection attempt
     if (this.relayMode.get(peerId)) {
-      console.log(`[WebRTC] Sending text to ${peerId} via relay`);
+      debugLog(`[WebRTC] Sending text to ${peerId} via relay`);
       return this._sendTextViaRelay(peerId, text);
     }
 
     // Verify we have a working P2P channel
     const dc = this.dataChannels.get(peerId);
     if (!dc || dc.readyState !== 'open') {
-      console.log(`[WebRTC] No P2P channel available for text, using relay for ${peerId}`);
+      debugLog(`[WebRTC] No P2P channel available for text, using relay for ${peerId}`);
       // Silent switch - already in usable state
       this._switchToRelay(peerId, null, true);
       return this._sendTextViaRelay(peerId, text);
     }
 
-    console.log(`[WebRTC] Sending text to ${peerId} via P2P`);
+    debugLog(`[WebRTC] Sending text to ${peerId} via P2P`);
     const encrypted = await cryptoManager.encryptText(peerId, text);
     const payload = JSON.stringify({ type: 'text', content: encrypted, isEncrypted: true });
 
@@ -2111,7 +2112,7 @@ export class WebRTCManager {
   async _sendTextViaRelay(peerId, text) {
     // Ensure we have encryption key before sending
     if (!cryptoManager.hasSharedSecret(peerId)) {
-      console.log(`[WebRTC] No shared key for ${peerId}, exchanging keys...`);
+      debugLog(`[WebRTC] No shared key for ${peerId}, exchanging keys...`);
       await this._exchangeKeysViaSignaling(peerId);
     }
 
@@ -2146,7 +2147,7 @@ export class WebRTCManager {
 
     // Wait for peer's public key
     await this.waitForEncryptionKey(peerId, 5000);
-    console.log(`[WebRTC] Key exchange completed with ${peerId}`);
+    debugLog(`[WebRTC] Key exchange completed with ${peerId}`);
   }
 
   /**
@@ -2157,7 +2158,7 @@ export class WebRTCManager {
       await cryptoManager.importPeerPublicKey(peerId, data.publicKey);
       this._resolveKeyWaiters(peerId);
       if (this.onPeerKeyReady) this.onPeerKeyReady(peerId);
-      console.log(`[WebRTC] Imported public key from ${peerId} via key-exchange`);
+      debugLog(`[WebRTC] Imported public key from ${peerId} via key-exchange`);
 
       // Send our public key back if they don't have it
       if (!this._keyExchangeSent?.has(peerId)) {
@@ -2264,7 +2265,7 @@ export class WebRTCManager {
   async ensureConnection(peerId) {
     // Already in relay mode? Skip P2P attempt
     if (this.relayMode.get(peerId)) {
-      console.log(`[WebRTC] Already in relay mode for ${peerId}`);
+      debugLog(`[WebRTC] Already in relay mode for ${peerId}`);
       return;
     }
 
@@ -2273,7 +2274,7 @@ export class WebRTCManager {
 
     // Already have a working P2P connection?
     if (channel && channel.readyState === 'open' && hasKey) {
-      console.log(`[WebRTC] Reusing existing P2P connection to ${peerId}`);
+      debugLog(`[WebRTC] Reusing existing P2P connection to ${peerId}`);
       return;
     }
 
@@ -2281,7 +2282,7 @@ export class WebRTCManager {
     // its outcome instead of starting a second, competing race
     const inFlightRace = this.connectionRacing.get(peerId);
     if (inFlightRace && inFlightRace.promise) {
-      console.log(`[WebRTC] Reusing in-flight race for ${peerId}`);
+      debugLog(`[WebRTC] Reusing in-flight race for ${peerId}`);
       const result = await inFlightRace.promise;
       if (result === 'p2p' || result === 'relay') {
         // Connection state already handled by the race (channel open or relay mode set)
@@ -2289,16 +2290,16 @@ export class WebRTCManager {
         return;
       }
       // 'failed' - fall through and run our own race
-      console.log(`[WebRTC] In-flight race for ${peerId} failed, starting new attempt`);
+      debugLog(`[WebRTC] In-flight race for ${peerId} failed, starting new attempt`);
     }
 
     // Already establishing connection?
     if (this.pendingConnections.has(peerId)) {
-      console.log(`[WebRTC] Waiting for pending connection to ${peerId}`);
+      debugLog(`[WebRTC] Waiting for pending connection to ${peerId}`);
       return this.pendingConnections.get(peerId);
     }
 
-    console.log(`[WebRTC] Starting connection with racing strategy to ${peerId}`);
+    debugLog(`[WebRTC] Starting connection with racing strategy to ${peerId}`);
     this._notifyConnectionState(peerId, 'connecting', '正在建立连接...');
 
     // Start racing between P2P and fast-fallback timer
@@ -2330,11 +2331,11 @@ export class WebRTCManager {
       if (!racingState.resolved) {
         racingState.resolved = true;
         racingState.winner = 'p2p';
-        console.log(`[WebRTC] P2P connection won the race for ${peerId}`);
+        debugLog(`[WebRTC] P2P connection won the race for ${peerId}`);
       }
       return 'p2p';
     }).catch(err => {
-      console.log(`[WebRTC] P2P attempt failed for ${peerId}: ${err.message}`);
+      debugLog(`[WebRTC] P2P attempt failed for ${peerId}: ${err.message}`);
       // P2P 失败时自动切换到中继，而不是抛出错误导致整个流程失败
       if (!racingState.resolved) {
         racingState.resolved = true;
@@ -2365,12 +2366,12 @@ export class WebRTCManager {
             !this._hasP2PProgress(peerId);
 
           if (shouldFallback) {
-            console.log(`[WebRTC] Fast-fallback triggered for ${peerId}`);
+            debugLog(`[WebRTC] Fast-fallback triggered for ${peerId}`);
             this._switchToRelay(peerId, i18n.t('transfer.connection.switchedToRelay'));
             resolve('relay');
           } else {
             // P2P seems promising, give it more time
-            console.log(`[WebRTC] P2P showing progress for ${peerId}, extending timeout`);
+            debugLog(`[WebRTC] P2P showing progress for ${peerId}, extending timeout`);
           }
         }
       }, this.relayFallbackTimeout);
@@ -2381,7 +2382,7 @@ export class WebRTCManager {
         clearTimeout(fallbackTimer);
 
         if (!racingState.resolved) {
-          console.log(`[WebRTC] Ultimate timeout for ${peerId}, switching to relay`);
+          debugLog(`[WebRTC] Ultimate timeout for ${peerId}, switching to relay`);
           this._switchToRelay(peerId, i18n.t('transfer.connection.timeoutSwitchRelay'));
           resolve('relay');
         }
@@ -2430,15 +2431,15 @@ export class WebRTCManager {
       if (!racingState.resolved) {
         racingState.resolved = true;
         racingState.winner = 'p2p';
-        console.log(`[WebRTC] Prewarm P2P succeeded for ${peerId}`);
+        debugLog(`[WebRTC] Prewarm P2P succeeded for ${peerId}`);
       }
       return 'p2p';
     }).catch(err => {
-      console.log(`[WebRTC] Prewarm P2P failed for ${peerId}: ${err.message}`);
+      debugLog(`[WebRTC] Prewarm P2P failed for ${peerId}: ${err.message}`);
       // If we already fell back to relay, take over background P2P retrying now
       // that the in-flight prewarm attempt has ended.
       if (this.relayMode.get(peerId) && !this.p2pRetryTimers.has(peerId)) {
-        console.log(`[WebRTC] In-flight prewarm attempt ended for ${peerId}, starting background P2P retry`);
+        debugLog(`[WebRTC] In-flight prewarm attempt ended for ${peerId}, starting background P2P retry`);
         this._startBackgroundP2PRetry(peerId);
       }
       return racingState.winner || 'failed';
@@ -2451,7 +2452,7 @@ export class WebRTCManager {
         if (racingState.resolved) return;
         racingState.resolved = true;
         racingState.winner = 'relay';
-        console.log(`[WebRTC] Prewarm falling back to relay for ${peerId} (proactive)`);
+        debugLog(`[WebRTC] Prewarm falling back to relay for ${peerId} (proactive)`);
         // Silent switch + skip background retry (the in-flight attempt above is still running)
         this._switchToRelay(peerId, null, true, true);
         resolve('relay');
@@ -2514,7 +2515,7 @@ export class WebRTCManager {
   _prewarmEncryptionKeys(peerId) {
     if (cryptoManager.hasSharedSecret(peerId)) return;
 
-    console.log(`[WebRTC] Pre-exchanging encryption keys with ${peerId} for relay mode`);
+    debugLog(`[WebRTC] Pre-exchanging encryption keys with ${peerId} for relay mode`);
     this._exchangeKeysViaSignaling(peerId).catch(err => {
       // Non-fatal - the key exchange will be retried on first actual send
       console.warn(`[WebRTC] Prewarm key exchange failed for ${peerId}: ${err.message}`);
@@ -2595,7 +2596,7 @@ export class WebRTCManager {
       this.waitForEncryptionKey(peerId, CONNECTION_TIMEOUT)
     ]);
 
-    console.log(`[WebRTC] P2P connection established with ${peerId}`);
+    debugLog(`[WebRTC] P2P connection established with ${peerId}`);
   }
 
   _notifyConnectionState(peerId, status, message) {
@@ -2639,7 +2640,7 @@ export class WebRTCManager {
       // Internal teardown while in relay mode - keep relay active so background
       // P2P retry and relay messaging keep working
       this.relayMode.set(peerId, true);
-      console.log(`[WebRTC] Relay mode preserved for ${peerId} during connection cleanup`);
+      debugLog(`[WebRTC] Relay mode preserved for ${peerId} during connection cleanup`);
     }
     this.knownPeers?.delete(peerId);
 
@@ -2698,6 +2699,6 @@ export class WebRTCManager {
     this.onTransferFailed = null;
     this.onPeerKeyReady = null;
 
-    console.log('[WebRTC] Manager destroyed');
+    debugLog('[WebRTC] Manager destroyed');
   }
 }
