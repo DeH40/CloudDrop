@@ -22,7 +22,8 @@
     "disconnected": "切断",
     "confirmAction": "アクションを確認",
     "confirmMessage": "この操作を実行してもよろしいですか?",
-    "github": "GitHub"
+    "github": "GitHub",
+    "join": "参加"
   },
   "deviceNames": {
     "adjectives": [
@@ -127,7 +128,8 @@
     },
     "deviceCount": {
       "other": "{{count}} 個のデバイス"
-    }
+    },
+    "transferIncomplete": "転送失敗：ファイルが不完全です。再試行してください"
   },
   "fileRequest": {
     "title": "ファイルを受信",
@@ -174,7 +176,8 @@
     "clickToCreateSecure": "クリックして暗号化ルームを作成",
     "autoAssigning": "自動割り当て中...",
     "switchedToRoom": "新しいルームに切り替えました: {{room}}",
-    "autoAssigned": "ルーム{{room}}に参加しました。他のデバイスとルームコードを共有してください"
+    "autoAssigned": "ルーム{{room}}に参加しました。他のデバイスとルームコードを共有してください",
+    "roomExpired": "ルームのパスワードが期限切れになり、通常のルームに戻りました"
   },
   "share": {
     "title": "ルームを共有",
@@ -316,7 +319,10 @@
     "unsupportedBrowser": "ブラウザがサポートされていません",
     "networkError": "ネットワークエラー",
     "fileReadFailed": "ファイルの読み取りに失敗しました",
-    "imageLoadFailed": "画像の読み込みに失敗しました"
+    "imageLoadFailed": "画像の読み込みに失敗しました",
+    "messageTooLarge": "メッセージがサイズ上限(256KB)を超えました。送信失敗",
+    "rateLimited": "送信が速すぎるため制限されました。しばらくしてから再試行してください",
+    "serverError": "サーバーエラー：{{error}}"
   },
   "notification": {
     "fileReceived": "新しいファイルを受信しました",

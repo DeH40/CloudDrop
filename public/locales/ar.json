@@ -134,7 +134,8 @@
       "two": "جهازان",
       "few": "{{count}} أجهزة",
       "other": "{{count}} جهاز"
-    }
+    },
+    "transferIncomplete": "فشل النقل: الملف غير مكتمل، يرجى إعادة المحاولة"
   },
   "fileRequest": {
     "title": "تم استلام ملف",
@@ -181,7 +182,8 @@
     "clickToCreateSecure": "انقر لإنشاء غرفة مشفرة",
     "autoAssigning": "تعيين تلقائي...",
     "switchedToRoom": "تم التحويل إلى غرفة جديدة: {{room}}",
-    "autoAssigned": "انضممت للغرفة {{room}}، شارك رمز الغرفة مع الأجهزة الأخرى"
+    "autoAssigned": "انضممت للغرفة {{room}}، شارك رمز الغرفة مع الأجهزة الأخرى",
+    "roomExpired": "انتهت صلاحية كلمة مرور الغرفة، تمت العودة إلى غرفة عادية"
   },
   "share": {
     "title": "مشاركة الغرفة",
@@ -323,7 +325,10 @@
     "unsupportedBrowser": "المتصفح غير مدعوم",
     "networkError": "خطأ في الشبكة",
     "fileReadFailed": "فشل قراءة الملف",
-    "imageLoadFailed": "فشل تحميل الصورة"
+    "imageLoadFailed": "فشل تحميل الصورة",
+    "messageTooLarge": "تجاوزت الرسالة حد الحجم (256 كيلوبايت)، فشل الإرسال",
+    "rateLimited": "الإرسال سريع جداً، تم التقييد. حاول مرة أخرى لاحقاً",
+    "serverError": "خطأ في الخادم: {{error}}"
   },
   "notification": {
     "fileReceived": "تم استلام ملف جديد",

@@ -128,7 +128,8 @@
     },
     "deviceCount": {
       "other": "{{count}} 個設備"
-    }
+    },
+    "transferIncomplete": "傳輸失敗：檔案不完整，請重試"
   },
   "fileRequest": {
     "title": "收到文件",
@@ -175,7 +176,8 @@
     "clickToCreateSecure": "點擊建立加密房間",
     "autoAssigning": "自動分配中...",
     "switchedToRoom": "已切換到新房間: {{room}}",
-    "autoAssigned": "已加入房間 {{room}}，請分享房間號給其他設備"
+    "autoAssigned": "已加入房間 {{room}}，請分享房間號給其他設備",
+    "roomExpired": "房間密碼已過期，已恢復為普通房間"
   },
   "share": {
     "title": "分享房間",
@@ -317,7 +319,10 @@
     "unsupportedBrowser": "瀏覽器不支援",
     "networkError": "網絡錯誤",
     "fileReadFailed": "文件讀取失敗",
-    "imageLoadFailed": "圖片載入失敗"
+    "imageLoadFailed": "圖片載入失敗",
+    "messageTooLarge": "訊息超過大小限制(256KB)，發送失敗",
+    "rateLimited": "發送過快，已被限流，請稍後重試",
+    "serverError": "伺服器錯誤：{{error}}"
   },
   "notification": {
     "fileReceived": "收到新文件",

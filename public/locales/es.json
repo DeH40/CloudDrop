@@ -130,7 +130,8 @@
     "deviceCount": {
       "one": "{{count}} dispositivo",
       "other": "{{count}} dispositivos"
-    }
+    },
+    "transferIncomplete": "Transferencia fallida: archivo incompleto, reintente"
   },
   "fileRequest": {
     "title": "Archivo recibido",
@@ -177,7 +178,8 @@
     "clickToCreateSecure": "Clic para crear sala cifrada",
     "autoAssigning": "Asignando automáticamente...",
     "switchedToRoom": "Cambiado a nueva sala: {{room}}",
-    "autoAssigned": "Se unió a la sala {{room}}, comparta el código de sala con otros dispositivos"
+    "autoAssigned": "Se unió a la sala {{room}}, comparta el código de sala con otros dispositivos",
+    "roomExpired": "La contraseña de la sala expiró, se volvió a una sala normal"
   },
   "share": {
     "title": "Compartir sala",
@@ -319,7 +321,10 @@
     "unsupportedBrowser": "Navegador no soportado",
     "networkError": "Error de red",
     "fileReadFailed": "Lectura de archivo fallida",
-    "imageLoadFailed": "Carga de imagen fallida"
+    "imageLoadFailed": "Carga de imagen fallida",
+    "messageTooLarge": "El mensaje supera el límite de tamaño (256KB), envío fallido",
+    "rateLimited": "Envío demasiado rápido, limitado. Inténtalo de nuevo más tarde",
+    "serverError": "Error del servidor: {{error}}"
   },
   "notification": {
     "fileReceived": "Nuevo archivo recibido",

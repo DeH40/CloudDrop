@@ -22,7 +22,8 @@
     "disconnected": "Disconnected",
     "confirmAction": "Confirm Action",
     "confirmMessage": "Are you sure you want to perform this action?",
-    "github": "GitHub"
+    "github": "GitHub",
+    "join": "Join"
   },
   "deviceNames": {
     "adjectives": [

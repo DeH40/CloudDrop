@@ -130,7 +130,8 @@
     "deviceCount": {
       "one": "{{count}} appareil",
       "other": "{{count}} appareils"
-    }
+    },
+    "transferIncomplete": "Transfert échoué : fichier incomplet, veuillez réessayer"
   },
   "fileRequest": {
     "title": "Fichier reçu",
@@ -177,7 +178,8 @@
     "clickToCreateSecure": "Cliquer pour créer une salle chiffrée",
     "autoAssigning": "Attribution automatique...",
     "switchedToRoom": "Passage à la nouvelle salle : {{room}}",
-    "autoAssigned": "Rejoint la salle {{room}}, partagez le code de salle avec d'autres appareils"
+    "autoAssigned": "Rejoint la salle {{room}}, partagez le code de salle avec d'autres appareils",
+    "roomExpired": "Le mot de passe de la salle a expiré, retour à une salle normale"
   },
   "share": {
     "title": "Partager la salle",
@@ -319,7 +321,10 @@
     "unsupportedBrowser": "Navigateur non supporté",
     "networkError": "Erreur réseau",
     "fileReadFailed": "Échec de la lecture du fichier",
-    "imageLoadFailed": "Échec du chargement de l'image"
+    "imageLoadFailed": "Échec du chargement de l'image",
+    "messageTooLarge": "Le message dépasse la limite de taille (256 Ko), envoi échoué",
+    "rateLimited": "Envoi trop rapide, limité. Réessayez plus tard",
+    "serverError": "Erreur du serveur : {{error}}"
   },
   "notification": {
     "fileReceived": "Nouveau fichier reçu",

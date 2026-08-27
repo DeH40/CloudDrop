@@ -130,7 +130,8 @@
     "deviceCount": {
       "one": "{{count}} Gerät",
       "other": "{{count}} Geräte"
-    }
+    },
+    "transferIncomplete": "Übertragung fehlgeschlagen: Datei unvollständig, bitte erneut versuchen"
   },
   "fileRequest": {
     "title": "Datei empfangen",
@@ -177,7 +178,8 @@
     "clickToCreateSecure": "Klicken Sie, um einen verschlüsselten Raum zu erstellen",
     "autoAssigning": "Automatische Zuweisung...",
     "switchedToRoom": "Zu neuem Raum gewechselt: {{room}}",
-    "autoAssigned": "Raum {{room}} beigetreten, teilen Sie den Raumcode mit anderen Geräten"
+    "autoAssigned": "Raum {{room}} beigetreten, teilen Sie den Raumcode mit anderen Geräten",
+    "roomExpired": "Raumpasswort abgelaufen, zurück zu einem normalen Raum"
   },
   "share": {
     "title": "Raum teilen",
@@ -319,7 +321,10 @@
     "unsupportedBrowser": "Browser nicht unterstützt",
     "networkError": "Netzwerkfehler",
     "fileReadFailed": "Datei konnte nicht gelesen werden",
-    "imageLoadFailed": "Bild konnte nicht geladen werden"
+    "imageLoadFailed": "Bild konnte nicht geladen werden",
+    "messageTooLarge": "Nachricht überschreitet das Größenlimit (256KB), Senden fehlgeschlagen",
+    "rateLimited": "Zu schnelles Senden, limitiert. Später erneut versuchen",
+    "serverError": "Serverfehler: {{error}}"
   },
   "notification": {
     "fileReceived": "Neue Datei erhalten",

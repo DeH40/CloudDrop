@@ -128,7 +128,8 @@
     },
     "deviceCount": {
       "other": "기기 {{count}}대"
-    }
+    },
+    "transferIncomplete": "전송 실패: 파일이 불완전합니다. 다시 시도하세요"
   },
   "fileRequest": {
     "title": "파일 수신",
@@ -175,7 +176,8 @@
     "clickToCreateSecure": "클릭하여 암호화된 방 만들기",
     "autoAssigning": "자동 할당 중...",
     "switchedToRoom": "새 방으로 전환됨: {{room}}",
-    "autoAssigned": "방 {{room}}에 참가했습니다. 다른 기기와 방 코드를 공유하세요"
+    "autoAssigned": "방 {{room}}에 참가했습니다. 다른 기기와 방 코드를 공유하세요",
+    "roomExpired": "방 비밀번호가 만료되어 일반 방으로 되돌아갔습니다"
   },
   "share": {
     "title": "방 공유",
@@ -317,7 +319,10 @@
     "unsupportedBrowser": "지원되지 않는 브라우저",
     "networkError": "네트워크 오류",
     "fileReadFailed": "파일 읽기 실패",
-    "imageLoadFailed": "이미지 로드 실패"
+    "imageLoadFailed": "이미지 로드 실패",
+    "messageTooLarge": "메시지가 크기 제한(256KB)을 초과하여 전송 실패",
+    "rateLimited": "너무 빠르게 전송하여 제한되었습니다. 잠시 후 다시 시도하세요",
+    "serverError": "서버 오류: {{error}}"
   },
   "notification": {
     "fileReceived": "새 파일을 받았습니다",
