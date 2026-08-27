@@ -96,5 +96,24 @@ export const chunkStore = {
     } catch (e) {
       // 忽略：数据库不可用
     }
+  },
+
+  /** 启动时清空整个分块库（上次会话中断的残留，防配额被反复中断吃满） */
+  async pruneAll() {
+    try {
+      const db = await openDb();
+      await new Promise((resolve) => {
+        try {
+          const tx = db.transaction(STORE, 'readwrite');
+          tx.objectStore(STORE).clear();
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => resolve();
+        } catch (e) {
+          resolve();
+        }
+      });
+    } catch (e) {
+      // 忽略：数据库不可用
+    }
   }
 };

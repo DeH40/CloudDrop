@@ -30,3 +30,6 @@ jobs:
 
       - name: Unit tests (node:test)
         run: npm test
+
+      - name: Smoke test (wrangler dev + WebSocket join)
+        run: node tests/smoke-ci.mjs

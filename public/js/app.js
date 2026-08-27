@@ -87,82 +87,64 @@ class CloudDrop {
   /**
    * 加载应用设置
    */
-
   /**
    * 保存应用设置
    */
-
   /**
    * 更新单个设置项
    * @param {string} key - 设置键名
    * @param {*} value - 设置值
    */
-
   /**
    * 限制超时值在有效范围内
    * @param {number} value - 输入值
    * @returns {number} - 限制后的值（1-60秒）
    */
-
   /**
    * 将设置应用到 WebRTC 模块
    */
-
   /**
    * 应用所有设置到 WebRTC（初始化时调用）
    */
-
   /**
    * Apply theme setting to document
    */
-
   /**
    * Resolve theme to light/dark
    */
-
   /**
    * Apply the resolved theme
    */
-
   /**
    * Update browser theme-color meta
    */
-
   /**
    * Load trusted devices from localStorage
    * Stores device fingerprint (name + deviceType + browserInfo hash)
    */
-
   /**
    * Save trusted devices to localStorage
    */
-
   /**
    * 生成设备指纹（用于信任识别）
    * 优先用持久设备公钥（防伪造）；旧客户端无密钥时回退旧指纹
    */
-
   /**
    * 旧版指纹：名字+设备类型+浏览器信息（可伪造，仅用于向后兼容）
    */
-
   /**
    * 简单字符串哈希（指纹用，非安全用途）
    */
-
   /**
    * Check if a device is trusted
    * 密钥指纹不匹配时回退旧指纹（兼容升级前已信任的设备）
    */
-
   /**
    * Trust a device (auto-accept files from it)
    */
-
   /**
    * Untrust a device
    */
-
   /**
    * 验证对方确实持有其声明的设备私钥（挑战-签名）
    * @param {object} peer - 设备信息（需包含 deviceKey）
@@ -254,15 +236,12 @@ class CloudDrop {
   /**
    * Update trusted badge on peer card
    */
-
   /**
    * Get list of all trusted devices
    */
-
   /**
    * Remove a trusted device by fingerprint
    */
-
   /**
    * Create a secure room with password
    * @param {string} roomCode - Room code
@@ -396,6 +375,12 @@ class CloudDrop {
 
     // Initialize i18n first
     await i18n.init({ defaultLocale: 'zh' });
+
+    // i18n 加载后重新生成自动设备名（构造器里生成时翻译尚未加载，会拿到回退语言）
+    if (!localStorage.getItem(STORAGE_KEYS.DEVICE_NAME)) {
+      this.deviceName = ui.generateDisplayName();
+      localStorage.setItem(STORAGE_KEYS.DEVICE_NAME, this.deviceName);
+    }
 
     // Setup language switcher early so it's available during connection
     this.setupLanguageSwitcher();
@@ -799,7 +784,13 @@ class CloudDrop {
             ui.showToast(i18n.t('errors.messageTooLarge'), 'error');
             break;
           case 'RATE_LIMIT_EXCEEDED':
-            ui.showToast(i18n.t('errors.rateLimited'), 'warning');
+            // 通知发送端主动降速（中继分块撞预算时避免持续重传）
+            this.webrtc?.onServerRateLimit?.();
+            // toast 限频：5 秒最多一条，防刷屏
+            if (!this._lastRateLimitToast || Date.now() - this._lastRateLimitToast > 5000) {
+              this._lastRateLimitToast = Date.now();
+              ui.showToast(i18n.t('errors.rateLimited'), 'warning');
+            }
             break;
           default:
             ui.showToast(i18n.t('errors.serverError', { error: message.error || 'UNKNOWN' }), 'error');
@@ -816,6 +807,16 @@ class CloudDrop {
             type: 'auth',
             data: { response }
           }));
+        } else {
+          // 无本地密码但房间已加密（如自动分配房间被他人设密）：
+          // 服务端在 challenge 里携带了房间号，用它引导用户输入密码
+          const roomCode = message.data?.roomCode;
+          if (roomCode) {
+            this.roomCode = roomCode;
+            this.updateRoomDisplay();
+            this.ws.close(4002, 'password required');
+            ui.showToast(i18n.t('room.passwordRequired'), 'error');
+          }
         }
         return;
       }
@@ -1196,7 +1197,7 @@ class CloudDrop {
   async handleFileRequest(peerId, data) {
     const peer = this.peers.get(peerId);
     const isRelayMode = data.transferMode === 'relay';
-    const isBatch = Array.isArray(data.files) && data.files.length > 1;
+    const isBatch = Array.isArray(data.files) && data.files.length >= 1;
 
     // 展示信息（批量：文件数+总大小）
     const displayName = isBatch
@@ -1695,7 +1696,6 @@ class CloudDrop {
    * @param {string} peerId - Target peer ID
    * @param {string} imageDataUrl - Base64 data URL of the image
    */
-
   /**
    * Compress and resize image for sending
    * Uses a quality/width ladder to fit the image within the relay message
@@ -1705,21 +1705,17 @@ class CloudDrop {
    * @param {number} quality - Initial JPEG quality 0-1 (default 0.8)
    * @returns {Promise<string>} - Base64 data URL
    */
-
   /**
    * Show image preview before sending
    * @param {File} file - Image file
    */
-
   /**
    * Clear pending image preview
    */
-
   /**
    * Show image in fullscreen modal
    * @param {string} imageUrl - Image URL or data URL
    */
-
   /**
    * Hide fullscreen image modal
    */
@@ -1735,18 +1731,13 @@ class CloudDrop {
    * @param {string} peerId
    * @param {boolean} forceRebuild - 强制全量重建（如消息状态变更）
    */
-
   /**
    * 构建单条消息元素
    */
-
   /**
    * Scroll chat container to bottom
    * Uses delayed scroll to handle async image loading
    */
-
-
-
   /**
    * Copy image to clipboard
    * @param {string} dataUrl - Image data URL
@@ -2634,10 +2625,6 @@ class CloudDrop {
     ui.showModal('mobileSettingsModal');
   }
 
-  /**
-   * Render trusted devices list in settings
-   */
-
   // Show mobile share modal
   showMobileShareModal() {
     const shareRoomCodeEl = document.getElementById('shareRoomCode');
@@ -2750,28 +2737,6 @@ class CloudDrop {
     }
   }
 
-  /**
-   * 设置 Popover (桌面端) 
-   */
-
-  /**
-   * 设置控件事件监听 (移动端和桌面端)
-   */
-
-  /**
-   * 同步设置值到 UI 控件
-   * @param {'popover'|'modal'} target - 目标 UI
-   */
-
-  /**
-   * 同步主题选择到 UI
-   * @param {'popover'|'modal'} target - 目标 UI
-   */
-
-  /**
-   * 同步信任设备列表到 UI
-   * @param {'popover'|'modal'} target - 目标 UI
-   */
 }
 
 // 拆分出的模块以 mixin 方式挂载（chat.js / settings.js）
@@ -2781,4 +2746,5 @@ Object.assign(CloudDrop.prototype, SettingsMixin);
 // Initialize app
 const app = new CloudDrop();
 app.init().catch(console.error);
+
 

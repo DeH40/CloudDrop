@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "test": "node --test tests/index.test.mjs"
+    "test": "node --test tests/index.test.mjs",
+    "smoke": "node tests/smoke-ci.mjs"
   },
   "keywords": [
     "cloudflare",

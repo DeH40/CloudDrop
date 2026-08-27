@@ -38,8 +38,8 @@ export const ChatMixin = {
   async sendImageMessage(peerId, imageDataUrl) {
     if (!imageDataUrl) return false;
 
-    // 预算预检：超限直接失败并提示，不静默丢失
-    if (imageDataUrl.length > 170000) {
+    // 预算预检：与 compressImage 的 IMAGE_BUDGET(100000) 自洽，超限直接失败
+    if (imageDataUrl.length > 100000) {
       ui.showToast(i18n.t('errors.messageTooLarge'), 'error');
       return false;
     }
@@ -76,10 +76,11 @@ export const ChatMixin = {
         const img = new Image();
         img.onload = () => {
           try {
-            // 预算阶梯：优先保质量，超预算则逐步降质量、降尺寸
-            // dataURL 150KB → 加密+base64 后约 200KB，低于服务端 256KB 上限
-            const IMAGE_BUDGET = 150000;
-            const qualityLadder = [0.8, 0.6, 0.45, 0.3];
+            // 预算阶梯：优先保质量，超预算则逐步降质量、降尺寸。
+            // 预算与 sendImageMessage 预检/MAX_TEXT_PAYLOAD 自洽：
+            // dataURL 100KB → 加密+base64+JSON 后 ≈ 185KB < 200KB 客户端上限
+            const IMAGE_BUDGET = 100000;
+            const qualityLadder = [0.8, 0.55, 0.35];
             const widthLadder = [1200, 1000, 800];
 
             let result = null;

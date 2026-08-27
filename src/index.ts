@@ -30,6 +30,12 @@ function isIceServersRateLimited(ip: string): boolean {
   let entry = iceServersRequestLimits.get(ip);
 
   if (!entry || now > entry.resetAt) {
+    // Map 只增不删会无限增长：超过阈值时顺带清理过期条目
+    if (iceServersRequestLimits.size > 500) {
+      for (const [k, v] of iceServersRequestLimits) {
+        if (now > v.resetAt) iceServersRequestLimits.delete(k);
+      }
+    }
     iceServersRequestLimits.set(ip, { count: 1, resetAt: now + ICE_SERVERS_WINDOW_MS });
     return false;
   }
@@ -38,28 +44,49 @@ function isIceServersRateLimited(ip: string): boolean {
   return entry.count > ICE_SERVERS_MAX_PER_IP;
 }
 
+const SECURITY_HEADERS: Record<string, string> = {
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'X-Frame-Options': 'DENY',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=()',
+};
+
+/** 给 Worker 路由响应统一附加安全头（静态资源由 public/_headers 覆盖） */
+function withSecurityHeaders(response: Response): Response {
+  const headers = new Headers(response.headers);
+  for (const [k, v] of Object.entries(SECURITY_HEADERS)) {
+    if (!headers.has(k)) headers.set(k, v);
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 export default {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
     // Handle WebSocket upgrade requests
+    // 注意：101 升级响应不能经 withSecurityHeaders 重建（会破坏 WebSocket 配对）
     if (url.pathname === '/ws') {
       return handleWebSocket(request, env);
     }
 
     // Handle room password APIs
     if (url.pathname === '/api/room/check-password') {
-      return handleCheckRoomPassword(request, env);
+      return withSecurityHeaders(await handleCheckRoomPassword(request, env));
     }
 
     // Handle ICE servers request (for TURN credentials)
     if (url.pathname === '/api/ice-servers') {
-      return handleIceServers(request, env);
+      return withSecurityHeaders(await handleIceServers(request, env));
     }
 
     // Static assets are handled automatically by Cloudflare
     // This is just a fallback for any unhandled routes
-    return new Response('Not Found', { status: 404 });
+    return withSecurityHeaders(new Response('Not Found', { status: 404 }));
   },
 };
 
@@ -174,7 +201,7 @@ async function handleIceServers(request: Request, env: Env): Promise<Response> {
           return s;
         });
 
-        // Cache until 5 minutes before expiry
+        // TTL 24h：缓存 23h，留 1h 余量；服务函数按"剩余 ≥1h"判有效
         cachedIceServers = { iceServers: filteredServers, expiresAt: Date.now() + 23 * 60 * 60 * 1000 };
 
         return new Response(JSON.stringify({ iceServers: filteredServers }), {

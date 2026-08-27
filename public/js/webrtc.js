@@ -341,6 +341,9 @@ export class WebRTCManager {
     // Pre-fetch ICE servers eagerly
     fetchIceServers();
 
+    // 清理上次会话中断残留的落盘分块（配额防满）
+    chunkStore.pruneAll().catch(() => {});
+
     // Track peers for prewarming
     this.knownPeers = new Set();
     this.prewarmEnabled = true;
@@ -348,6 +351,9 @@ export class WebRTCManager {
     // 中继降级设置
     this.relayFallbackEnabled = true;
     this.relayFallbackTimeout = FAST_FALLBACK_TIMEOUT;
+
+    // 中继发送自适应限速（收到服务端限流告警后递增，每文件传输重置）
+    this.relayChunkInterval = null;
 
     // Background P2P retry tracking
     this.p2pRetryTimers = new Map(); // peerId -> timeout id
@@ -397,6 +403,16 @@ export class WebRTCManager {
    * 设置是否允许中继降级
    * @param {boolean} enabled - 是否启用
    */
+  /**
+   * 服务端限流告警：主动降速（发送间隔翻倍，上限 320ms）
+   * 配合服务端 2MB/s 字节预算，避免持续撞预算→丢弃→重传循环
+   */
+  onServerRateLimit() {
+    const current = this.relayChunkInterval || RELAY.CHUNK_INTERVAL;
+    this.relayChunkInterval = Math.min(current * 2, 320);
+    debugLog(`[WebRTC] 中继发送降速: ${current}ms -> ${this.relayChunkInterval}ms`);
+  }
+
   setRelayFallbackEnabled(enabled) {
     this.relayFallbackEnabled = enabled;
     debugLog(`[WebRTC] Relay fallback ${enabled ? 'enabled' : 'disabled'}`);
@@ -1457,8 +1473,8 @@ export class WebRTCManager {
 
       dc.send(JSON.stringify({ type: 'file-end', fileId }));
 
-      // 等待接收方确认组装完成（批量发送顺序保障；兼容旧客户端超时放行）
-      const ok = await this._waitForFileEndAck(fileId);
+      // 等待接收方确认组装完成（批量发送顺序保障；超时随文件大小伸缩）
+      const ok = await this._waitForFileEndAck(fileId, file.size);
       if (!ok) throw new Error(ERROR_CODES.TRANSFER_FAILED);
     } finally {
       this.activeTransfers.delete(fileId);
@@ -1470,6 +1486,9 @@ export class WebRTCManager {
    * Features: flow control, ACK, retransmission, timeout handling
    */
   async _sendFileDataViaRelay(peerId, file, fileId) {
+    // 每个文件重置自适应限速状态
+    this.relayChunkInterval = null;
+
     // Register active transfer with enhanced state
     const transferState = {
       peerId,
@@ -1576,7 +1595,8 @@ export class WebRTCManager {
           });
         }
 
-        await new Promise(r => setTimeout(r, RELAY.CHUNK_INTERVAL));
+        // 自适应限速：默认与 2MB/s 预算匹配，收到告警后翻倍
+        await new Promise(r => setTimeout(r, this.relayChunkInterval || RELAY.CHUNK_INTERVAL));
       }
 
       // Wait for all chunks to be acknowledged (with timeout)
@@ -1604,8 +1624,8 @@ export class WebRTCManager {
 
       debugLog(`[WebRTC] Relay transfer complete: ${totalChunks} chunks sent`);
 
-      // 等待接收方确认组装完成（批量发送顺序保障；兼容旧客户端超时放行）
-      const ok = await this._waitForFileEndAck(fileId);
+      // 等待接收方确认组装完成（批量发送顺序保障；超时随文件大小伸缩）
+      const ok = await this._waitForFileEndAck(fileId, file.size);
       if (!ok) throw new Error(ERROR_CODES.TRANSFER_FAILED);
     } finally {
       // Keep transfer state for a grace period so the receiver can request
@@ -1681,13 +1701,15 @@ export class WebRTCManager {
    * 等待接收方对 file-end 的确认（组装完成/失败）
    * 超时视为失败（不误报成功），避免把“接收方失联”报告为发送成功
    */
-  _waitForFileEndAck(fileId, timeout = 60000) {
+  _waitForFileEndAck(fileId, fileSize = 0, timeout = 60000) {
+    // 超时随文件大小伸缩：接收端组装大文件（IDB 读回 + Blob 构造）耗时更长
+    const scaledTimeout = Math.max(timeout, Math.ceil(fileSize / (5 * 1024 * 1024)) * 1000 + 15000);
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         this.fileEndAckWaiters.delete(fileId);
         console.warn(`[WebRTC] file-end-ack 超时: ${fileId}`);
         resolve(false);
-      }, timeout);
+      }, scaledTimeout);
       this.fileEndAckWaiters.set(fileId, { resolve, timer });
     });
   }
@@ -1715,8 +1737,8 @@ export class WebRTCManager {
       mimeType: meta.mimeType || 'application/octet-stream',
       totalChunks: meta.totalChunks
     });
-    // 防无界增长：只保留最近 100 个授权
-    while (this.authorizedIncoming.size > 100) {
+    // 防无界增长：只保留最近 500 个授权
+    while (this.authorizedIncoming.size > 500) {
       this.authorizedIncoming.delete(this.authorizedIncoming.keys().next().value);
     }
   }
@@ -1728,8 +1750,12 @@ export class WebRTCManager {
   _matchAuthorizedMeta(authorized, msg) {
     const { size, totalChunks } = msg;
     if (!Number.isInteger(size) || size < 0 || size > MAX_FILE_SIZE) return false;
-    if (!Number.isInteger(totalChunks) || totalChunks < 1) return false;
+    if (!Number.isInteger(totalChunks) || totalChunks < 0) return false;
     if (totalChunks > Math.ceil(MAX_FILE_SIZE / CHUNK_SIZE) + 1) return false;
+
+    // 空文件：size=0 且 totalChunks=0（发送端 ceil(0/CHUNK_SIZE)=0）
+    if (size === 0 && totalChunks !== 0) return false;
+    if (size > 0 && totalChunks < 1) return false;
 
     // 与用户确认时展示的字段完全一致
     if (authorized.size !== size) return false;

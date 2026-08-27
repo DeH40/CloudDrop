@@ -55,6 +55,7 @@ export class Room {
   // peerId -> WebSocket cache to avoid getWebSockets()+JSON deserialization per message.
   // Lazily rebuilt (null on hibernation wake, stale entries pruned on close).
   private peerWsCache: Map<string, WebSocket> | null = null;
+  private leaveNotified: WeakSet<WebSocket> = new WeakSet(); // peer-left 广播去重
   // Removed global passwordAttempts to prevent DoS
 
   // Constants
@@ -236,11 +237,12 @@ export class Room {
     // Initialize rate limiter for this connection
     this.messageRateLimits.set(server, { count: 0, lastReset: Date.now() });
 
-    // If password is required, send challenge immediately
+    // If password is required, send challenge immediately (携带房间号：
+    // 无本地密码的客户端需要它来引导输入密码，自动分配房间此前拿不到 roomCode)
     if (this.passwordHash !== null) {
       server.send(JSON.stringify({
         type: 'challenge',
-        data: { nonce }
+        data: { nonce, roomCode }
       }));
       // Do NOT delete alarm here. Wait until auth success.
     }
@@ -406,8 +408,8 @@ export class Room {
       }
 
       const entry = all[bucket] || { count: 0, windowStart: now };
+      // 窗口起点只在过期重建时更新，失败只累加计数（防永久锁房 DoS）
       entry.count += 1;
-      entry.windowStart = now;
       all[bucket] = entry;
 
       await this.state.storage.put('authFailuresByBucket', all);
@@ -572,9 +574,9 @@ export class Room {
       const newAttempts = attempts + 1;
       const newNonce = crypto.randomUUID();
 
-      // Increment global room-level failure counter
+      // 失败窗口：只在窗口过期时重置起点；失败只累加计数。
+      // （若每次失败都重置 windowStart，攻击者每 9 分钟失败一次即可永久锁房）
       failures.count += 1;
-      failures.windowStart = now;
       await this.state.storage.put('authFailures', failures);
 
       // Increment per-bucket failure counter
@@ -623,13 +625,14 @@ export class Room {
 
   /**
    * WebSocket error handler (Hibernation API)
-   * Note: a close event always follows an error - peer-left is handled once
-   * in webSocketClose to avoid duplicate broadcasts.
+   * 异常断线（网络中断/超时）可能只触发 error 不触发 close——同样广播
+   * peer-left，避免幽灵设备卡片；用 WeakSet 去重防止 close+error 双广播。
    */
   async webSocketError(ws: WebSocket, _error: unknown): Promise<void> {
     this.messageRateLimits.delete(ws);
     this.relayByteBudget.delete(ws);
     this.relayDropWarn.delete(ws);
+    await this.handleLeave(ws);
   }
 
   /**
@@ -711,9 +714,12 @@ export class Room {
   }
 
   /**
-   * Handle peer leaving the room
+   * Handle peer leaving the room（WeakSet 去重：close 与 error 可能都触发）
    */
   private async handleLeave(ws: WebSocket): Promise<void> {
+    if (this.leaveNotified.has(ws)) return;
+    this.leaveNotified.add(ws);
+
     const peerId = this.getPeerIdFromWs(ws);
     
     if (peerId) {

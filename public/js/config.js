@@ -115,8 +115,10 @@ export const RELAY = {
   // Batch ACK: acknowledge every N chunks
   ACK_BATCH_SIZE: 5,
 
-  // Chunk send interval (throttle)
-  CHUNK_INTERVAL: 5, // 5ms between chunks
+  // Chunk send interval (throttle) - 默认与服务端 2MB/s 字节预算匹配
+  //（63KB / 40ms ≈ 1.6MB/s 净载荷，base64+JSON 后约 2.1MB/s）；
+  // 收到服务端限流告警后发送端还会自适应翻倍
+  CHUNK_INTERVAL: 40,
 
   // Transfer timeout (no progress)
   TRANSFER_TIMEOUT: 30000, // 30 seconds
