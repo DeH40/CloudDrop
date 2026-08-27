@@ -48,6 +48,9 @@ export class Room {
   private passwordHash: string | null; // Password hash for secure rooms (null = no password)
   private messageRateLimits: Map<WebSocket, { count: number; lastReset: number }> = new Map();
   private relayByteBudget: Map<WebSocket, { tokens: number; lastRefill: number }> = new Map();
+  // peerId -> WebSocket cache to avoid getWebSockets()+JSON deserialization per message.
+  // Lazily rebuilt (null on hibernation wake, stale entries pruned on close).
+  private peerWsCache: Map<string, WebSocket> | null = null;
   // Removed global passwordAttempts to prevent DoS
 
   // Constants
@@ -522,6 +525,15 @@ export class Room {
   async webSocketClose(ws: WebSocket, _code: number, _reason: string, _wasClean: boolean): Promise<void> {
     this.messageRateLimits.delete(ws);
     this.relayByteBudget.delete(ws);
+
+    // Prune the cache entry for this connection
+    if (this.peerWsCache) {
+      const attachment = ws.deserializeAttachment() as PeerAttachment | null;
+      if (attachment?.id && this.peerWsCache.get(attachment.id) === ws) {
+        this.peerWsCache.delete(attachment.id);
+      }
+    }
+
     await this.handleLeave(ws);
   }
 
@@ -568,6 +580,10 @@ export class Room {
 
     // Store peer info in WebSocket attachment (survives hibernation)
     ws.serializeAttachment(attachment);
+
+    // Keep the peerId -> ws cache in sync
+    if (!this.peerWsCache) this.rebuildPeerCache();
+    this.peerWsCache?.set(peerId, ws);
 
     // Setup auto-response for ping/pong
     this.state.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
@@ -644,6 +660,27 @@ export class Room {
   }
 
   /**
+   * Rebuild the peerId -> WebSocket cache from hibernation state
+   */
+  private rebuildPeerCache(): void {
+    this.peerWsCache = new Map();
+    for (const ws of this.state.getWebSockets()) {
+      const attachment = ws.deserializeAttachment() as PeerAttachment | null;
+      if (attachment?.id) {
+        this.peerWsCache.set(attachment.id, ws);
+      }
+    }
+  }
+
+  /**
+   * Get the WebSocket for a peer ID using the cache (lazy rebuild on wake)
+   */
+  private getPeerWs(peerId: string): WebSocket | undefined {
+    if (!this.peerWsCache) this.rebuildPeerCache();
+    return this.peerWsCache?.get(peerId);
+  }
+
+  /**
    * Handle WebRTC signaling messages (offer/answer/ice-candidate)
    */
   private async handleSignaling(ws: WebSocket, msg: SignalingMessage): Promise<void> {
@@ -652,22 +689,17 @@ export class Room {
     const fromPeerId = this.getPeerIdFromWs(ws);
     if (!fromPeerId) return;
 
-    // Find target peer - iterate through all WebSockets
-    const webSockets = this.state.getWebSockets();
-    for (const targetWs of webSockets) {
-      try {
-        const attachment = targetWs.deserializeAttachment() as PeerAttachment | null;
-        if (attachment && attachment.id === msg.to) {
-          targetWs.send(JSON.stringify({
-            type: msg.type,
-            from: fromPeerId,
-            data: msg.data,
-          }));
-          break;
-        }
-      } catch (e) {
-        console.error(`[Room] Failed to send signaling to ${msg.to}:`, e);
-      }
+    const targetWs = this.getPeerWs(msg.to);
+    if (!targetWs) return;
+
+    try {
+      targetWs.send(JSON.stringify({
+        type: msg.type,
+        from: fromPeerId,
+        data: msg.data,
+      }));
+    } catch (e) {
+      console.error(`[Room] Failed to send signaling to ${msg.to}:`, e);
     }
   }
 
@@ -722,46 +754,34 @@ export class Room {
   }
 
   /**
-   * Send message to a specific peer by ID
-   * Iterates through all WebSockets to find the target
+   * Send message to a specific peer by ID (uses the peerId -> ws cache)
    */
   private sendToPeer(targetPeerId: string, message: object): boolean {
-    const webSockets = this.state.getWebSockets();
+    const targetWs = this.getPeerWs(targetPeerId);
+    if (!targetWs) return false;
 
-    for (const ws of webSockets) {
-      try {
-        const attachment = ws.deserializeAttachment() as PeerAttachment | null;
-        if (attachment && attachment.id === targetPeerId) {
-          ws.send(JSON.stringify(message));
-          return true;
-        }
-      } catch (e) {
-        console.error(`[Room] Failed to send to ${targetPeerId}:`, e);
-      }
+    try {
+      targetWs.send(JSON.stringify(message));
+      return true;
+    } catch (e) {
+      console.error(`[Room] Failed to send to ${targetPeerId}:`, e);
+      return false;
     }
-
-    return false;
   }
 
   /**
-   * Broadcast message to all peers except excluded one
-   * Uses direct WebSocket iteration with try-catch for robustness
+   * Broadcast message to all peers except excluded one (uses the cache)
    */
   private broadcast(msg: SignalingMessage, excludePeerId?: string): void {
     const message = JSON.stringify(msg);
-    const webSockets = this.state.getWebSockets();
+    if (!this.peerWsCache) this.rebuildPeerCache();
 
-    for (const ws of webSockets) {
+    for (const [peerId, targetWs] of this.peerWsCache!.entries()) {
+      if (peerId === excludePeerId) continue;
+
       try {
-        const attachment = ws.deserializeAttachment() as PeerAttachment | null;
-
-        // Skip if no attachment, no ID, or is the excluded peer
-        if (!attachment || !attachment.id || attachment.id === excludePeerId) {
-          continue;
-        }
-
         // Try to send regardless of readyState - let the send fail if connection is bad
-        ws.send(message);
+        targetWs.send(message);
       } catch (e) {
         // Silently ignore send failures - peer may have disconnected
       }
