@@ -8,6 +8,8 @@ import * as ui from './ui.js';
 import { STORAGE_KEYS, ROOM, DEFAULT_SETTINGS, ERROR_CODES } from './config.js';
 import { i18n } from './i18n.js';
 import { debugLog } from './logger.js';
+import { ChatMixin } from './chat.js';
+import { SettingsMixin } from './settings.js';
 
 class CloudDrop {
   constructor() {
@@ -74,215 +76,81 @@ class CloudDrop {
   /**
    * 加载应用设置
    */
-  loadSettings() {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-      return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : { ...DEFAULT_SETTINGS };
-    } catch (e) {
-      console.warn('Failed to load settings:', e);
-      return { ...DEFAULT_SETTINGS };
-    }
-  }
 
   /**
    * 保存应用设置
    */
-  saveSettings() {
-    try {
-      localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(this.settings));
-    } catch (e) {
-      console.warn('Failed to save settings:', e);
-    }
-  }
 
   /**
    * 更新单个设置项
    * @param {string} key - 设置键名
    * @param {*} value - 设置值
    */
-  updateSetting(key, value) {
-    this.settings[key] = value;
-    this.saveSettings();
-    if (key === 'theme') {
-      this.applyThemeSetting();
-      this.syncThemeToUI('modal');
-      this.syncThemeToUI('popover');
-      return;
-    }
-    this.applySettingToWebRTC(key, value);
-  }
 
   /**
    * 限制超时值在有效范围内
    * @param {number} value - 输入值
    * @returns {number} - 限制后的值（1-60秒）
    */
-  clampTimeout(value) {
-    return Math.max(1, Math.min(60, value));
-  }
 
   /**
    * 将设置应用到 WebRTC 模块
    */
-  applySettingToWebRTC(key, value) {
-    if (!this.webrtc) return;
-    switch (key) {
-      case 'allowRelayFallback':
-        this.webrtc.setRelayFallbackEnabled(value);
-        break;
-      case 'relayFallbackTimeout':
-        this.webrtc.setRelayFallbackTimeout(value);
-        break;
-      case 'enablePrewarm':
-        this.webrtc.setPrewarmEnabled(value);
-        break;
-    }
-  }
 
   /**
    * 应用所有设置到 WebRTC（初始化时调用）
    */
-  applyAllSettingsToWebRTC() {
-    if (!this.webrtc) return;
-    this.applySettingToWebRTC('allowRelayFallback', this.settings.allowRelayFallback);
-    this.applySettingToWebRTC('relayFallbackTimeout', this.settings.relayFallbackTimeout);
-    this.applySettingToWebRTC('enablePrewarm', this.settings.enablePrewarm);
-  }
 
   /**
    * Apply theme setting to document
    */
-  applyThemeSetting() {
-    const theme = this.settings.theme || 'system';
-    const resolvedTheme = this.resolveTheme(theme);
-    this.applyTheme(resolvedTheme);
-  }
 
   /**
    * Resolve theme to light/dark
    */
-  resolveTheme(theme) {
-    if (theme === 'system') {
-      if (this.themeMediaQuery) {
-        return this.themeMediaQuery.matches ? 'dark' : 'light';
-      }
-      return 'dark';
-    }
-    return theme === 'light' ? 'light' : 'dark';
-  }
 
   /**
    * Apply the resolved theme
    */
-  applyTheme(theme) {
-    const root = document.documentElement;
-    root.setAttribute('data-theme', theme);
-    root.style.colorScheme = theme;
-    this.updateThemeMetaColor(theme);
-  }
 
   /**
    * Update browser theme-color meta
    */
-  updateThemeMetaColor(theme) {
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (!meta) return;
-    meta.setAttribute('content', theme === 'dark' ? '#0f0f23' : '#f4f6f8');
-  }
 
   /**
    * Load trusted devices from localStorage
    * Stores device fingerprint (name + deviceType + browserInfo hash)
    */
-  loadTrustedDevices() {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.TRUSTED_DEVICES);
-      return saved ? new Map(JSON.parse(saved)) : new Map();
-    } catch (e) {
-      console.warn('Failed to load trusted devices:', e);
-      return new Map();
-    }
-  }
 
   /**
    * Save trusted devices to localStorage
    */
-  saveTrustedDevices() {
-    try {
-      localStorage.setItem(STORAGE_KEYS.TRUSTED_DEVICES,
-        JSON.stringify(Array.from(this.trustedDevices.entries())));
-    } catch (e) {
-      console.warn('Failed to save trusted devices:', e);
-    }
-  }
 
   /**
    * 生成设备指纹（用于信任识别）
    * 优先用持久设备公钥（防伪造）；旧客户端无密钥时回退旧指纹
    */
-  getDeviceFingerprint(peer) {
-    if (peer.deviceKey && cryptoManager.isIdentityPersistent()) {
-      return this.hashFingerprint(`key:${peer.deviceKey}`);
-    }
-    return this.getLegacyDeviceFingerprint(peer);
-  }
 
   /**
    * 旧版指纹：名字+设备类型+浏览器信息（可伪造，仅用于向后兼容）
    */
-  getLegacyDeviceFingerprint(peer) {
-    return this.hashFingerprint(`${peer.name}|${peer.deviceType}|${peer.browserInfo || ''}`);
-  }
 
   /**
    * 简单字符串哈希（指纹用，非安全用途）
    */
-  hashFingerprint(str) {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash;
-    }
-    return hash.toString(16);
-  }
 
   /**
    * Check if a device is trusted
    * 密钥指纹不匹配时回退旧指纹（兼容升级前已信任的设备）
    */
-  isDeviceTrusted(peer) {
-    const fingerprint = this.getDeviceFingerprint(peer);
-    if (this.trustedDevices.has(fingerprint)) return true;
-    const legacyFingerprint = this.getLegacyDeviceFingerprint(peer);
-    return legacyFingerprint !== fingerprint && this.trustedDevices.has(legacyFingerprint);
-  }
 
   /**
    * Trust a device (auto-accept files from it)
    */
-  trustDevice(peer) {
-    const fingerprint = this.getDeviceFingerprint(peer);
-    this.trustedDevices.set(fingerprint, {
-      name: peer.name,
-      deviceType: peer.deviceType,
-      browserInfo: peer.browserInfo,
-      trustedAt: Date.now()
-    });
-    this.saveTrustedDevices();
-    this.updateTrustedBadge(peer.id, true);
-    ui.showToast(i18n.t('toast.trusted', { name: peer.name }), 'success');
-  }
 
   /**
    * Untrust a device
    */
-  untrustDevice(peer) {
-    const fingerprint = this.getDeviceFingerprint(peer);
-    this.trustedDevices.delete(fingerprint);
-    this.saveTrustedDevices();
-    this.updateTrustedBadge(peer.id, false);
-  }
 
   /**
    * 验证对方确实持有其声明的设备私钥（挑战-签名）
@@ -375,71 +243,14 @@ class CloudDrop {
   /**
    * Update trusted badge on peer card
    */
-  updateTrustedBadge(peerId, trusted) {
-    const card = document.querySelector(`[data-peer-id="${peerId}"]`);
-    if (!card) return;
-
-    const existingBadge = card.querySelector('.peer-trusted-badge');
-
-    if (trusted && !existingBadge) {
-      const badge = document.createElement('div');
-      badge.className = 'peer-trusted-badge';
-      badge.title = i18n.t('settings.clickToUntrust');
-      badge.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>`;
-
-      // Click to untrust
-      badge.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        const peer = this.peers.get(peerId);
-        if (!peer) return;
-
-        const confirmed = await ui.showConfirmDialog({
-          title: i18n.t('settings.untrust'),
-          message: i18n.t('settings.confirmUntrust', { name: ui.escapeHtml(peer.name) }),
-          confirmText: i18n.t('settings.untrust'),
-          cancelText: i18n.t('settings.keepTrust'),
-          type: 'warning'
-        });
-
-        if (confirmed) {
-          this.untrustDevice(peer);
-          ui.showToast(i18n.t('toast.untrusted', { name: peer.name }), 'info');
-        }
-      });
-
-      card.appendChild(badge);
-    } else if (!trusted && existingBadge) {
-      existingBadge.remove();
-    }
-  }
 
   /**
    * Get list of all trusted devices
    */
-  getTrustedDevicesList() {
-    return Array.from(this.trustedDevices.entries()).map(([fingerprint, info]) => ({
-      fingerprint,
-      ...info
-    }));
-  }
 
   /**
    * Remove a trusted device by fingerprint
    */
-  removeTrustedDevice(fingerprint) {
-    const info = this.trustedDevices.get(fingerprint);
-    this.trustedDevices.delete(fingerprint);
-    this.saveTrustedDevices();
-
-    // Update any matching peer cards
-    for (const [peerId, peer] of this.peers.entries()) {
-      if (this.getDeviceFingerprint(peer) === fingerprint) {
-        this.updateTrustedBadge(peerId, false);
-      }
-    }
-
-    return info;
-  }
 
   /**
    * Create a secure room with password
@@ -1738,72 +1549,14 @@ class CloudDrop {
     }
   }
 
-  saveMessage(peerId, message) {
-    if (!this.messageHistory.has(peerId)) {
-      this.messageHistory.set(peerId, []);
-    }
-    this.messageHistory.get(peerId).push(message);
-  }
 
-  getMessageHistory(peerId) {
-    return this.messageHistory.get(peerId) || [];
-  }
 
-  async sendTextMessage(peerId, text) {
-    if (!text.trim()) return;
-
-    try {
-      await this.webrtc.sendText(peerId, text);
-      this.saveMessage(peerId, { type: 'sent', text, timestamp: Date.now() });
-      return true;
-    } catch (e) {
-      if (e.message === ERROR_CODES.MESSAGE_TOO_LARGE) {
-        ui.showToast(i18n.t('errors.messageTooLarge'), 'error');
-      } else {
-        ui.showToast(i18n.t('toast.sendFailed', { error: e.message }), 'error');
-      }
-      return false;
-    }
-  }
 
   /**
    * Send an image message
    * @param {string} peerId - Target peer ID
    * @param {string} imageDataUrl - Base64 data URL of the image
    */
-  async sendImageMessage(peerId, imageDataUrl) {
-    if (!imageDataUrl) return false;
-
-    // 预算预检：超限直接失败并提示，不静默丢失
-    if (imageDataUrl.length > 170000) {
-      ui.showToast(i18n.t('errors.messageTooLarge'), 'error');
-      return false;
-    }
-
-    try {
-      // Create message payload
-      const payload = JSON.stringify({
-        type: 'image',
-        data: imageDataUrl
-      });
-
-      await this.webrtc.sendText(peerId, payload);
-      this.saveMessage(peerId, {
-        type: 'sent',
-        messageType: 'image',
-        imageData: imageDataUrl,
-        timestamp: Date.now()
-      });
-      return true;
-    } catch (e) {
-      if (e.message === ERROR_CODES.MESSAGE_TOO_LARGE) {
-        ui.showToast(i18n.t('errors.messageTooLarge'), 'error');
-      } else {
-        ui.showToast(i18n.t('chat.imageSendFailed', { error: e.message }), 'error');
-      }
-      return false;
-    }
-  }
 
   /**
    * Compress and resize image for sending
@@ -1814,98 +1567,20 @@ class CloudDrop {
    * @param {number} quality - Initial JPEG quality 0-1 (default 0.8)
    * @returns {Promise<string>} - Base64 data URL
    */
-  async compressImage(file, maxWidth = 1200, quality = 0.8) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          try {
-            // 预算阶梯：优先保质量，超预算则逐步降质量、降尺寸
-            // dataURL 150KB → 加密+base64 后约 200KB，低于服务端 256KB 上限
-            const IMAGE_BUDGET = 150000;
-            const qualityLadder = [0.8, 0.6, 0.45, 0.3];
-            const widthLadder = [1200, 1000, 800];
-
-            let result = null;
-
-            for (const width of widthLadder) {
-              for (const q of qualityLadder) {
-                const scale = Math.min(1, width / img.width);
-                const canvas = document.createElement('canvas');
-                canvas.width = Math.max(1, Math.round(img.width * scale));
-                canvas.height = Math.max(1, Math.round(img.height * scale));
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-                const dataUrl = canvas.toDataURL('image/jpeg', q);
-                if (dataUrl.length <= IMAGE_BUDGET) {
-                  result = dataUrl;
-                  break;
-                }
-                // Keep the smallest candidate in case no step fits the budget
-                if (!result || dataUrl.length < result.length) {
-                  result = dataUrl;
-                }
-              }
-              if (result && result.length <= IMAGE_BUDGET) break;
-            }
-
-            resolve(result);
-          } catch (err) {
-            reject(new Error(i18n.t('errors.imageLoadFailed')));
-          }
-        };
-        img.onerror = () => reject(new Error(i18n.t('errors.imageLoadFailed')));
-        img.src = e.target.result;
-      };
-      reader.onerror = () => reject(new Error(i18n.t('errors.fileReadFailed')));
-      reader.readAsDataURL(file);
-    });
-  }
 
   /**
    * Show image preview before sending
    * @param {File} file - Image file
    */
-  async showImagePreview(file) {
-    try {
-      const dataUrl = await this.compressImage(file);
-      this.pendingImage = { dataUrl, file };
-
-      const preview = document.getElementById('chatImagePreview');
-      const previewImg = document.getElementById('previewImage');
-
-      previewImg.src = dataUrl;
-      preview.style.display = 'block';
-    } catch (e) {
-      ui.showToast(i18n.t('chat.imagePreviewFailed', { error: e.message }), 'error');
-    }
-  }
 
   /**
    * Clear pending image preview
    */
-  clearImagePreview() {
-    this.pendingImage = null;
-    const preview = document.getElementById('chatImagePreview');
-    const previewImg = document.getElementById('previewImage');
-
-    preview.style.display = 'none';
-    previewImg.src = '';
-  }
 
   /**
    * Show image in fullscreen modal
    * @param {string} imageUrl - Image URL or data URL
    */
-  showImageFullscreen(imageUrl) {
-    const modal = document.getElementById('imageFullscreenModal');
-    const img = document.getElementById('fullscreenImage');
-
-    img.src = imageUrl;
-    modal.classList.add('active');
-  }
 
   /**
    * Hide fullscreen image modal
@@ -1915,286 +1590,32 @@ class CloudDrop {
     modal.classList.remove('active');
   }
 
-  openChatPanel(peer) {
-    this.currentChatPeer = peer;
-    document.getElementById('chatTitle').textContent = i18n.t('chat.titleWithPeer', { name: peer.name });
-    this.renderChatHistory(peer.id);
-    document.getElementById('chatPanel').classList.add('active');
 
-    // Focus input after a short delay to ensure panel is visible
-    setTimeout(() => {
-      document.getElementById('chatInput')?.focus();
-    }, 100);
-
-    // Clear unread messages
-    this.unreadMessages.set(peer.id, 0);
-    this.updateUnreadBadge(peer.id);
-  }
-
-  closeChatPanel() {
-    document.getElementById('chatPanel').classList.remove('active');
-    this.currentChatPeer = null;
-  }
 
   /**
    * 渲染聊天历史：新消息增量追加，状态变更/面板切换时全量重建
    * @param {string} peerId
    * @param {boolean} forceRebuild - 强制全量重建（如消息状态变更）
    */
-  renderChatHistory(peerId, forceRebuild = false) {
-    const messages = this.getMessageHistory(peerId);
-    const container = document.getElementById('chatMessages');
-    const renderedCount = this.renderedChatCounts.get(peerId) || 0;
-
-    // 空历史：只渲染一次空状态
-    if (messages.length === 0) {
-      if (container.children.length === 0) {
-        const emptyEl = document.createElement('div');
-        emptyEl.className = 'chat-empty-state';
-        emptyEl.innerHTML = `
-          <div class="chat-empty-icon">${i18n.t('chat.emptyState.icon')}</div>
-          <p class="chat-empty-text">${i18n.t('chat.emptyState.text')}</p>
-          <p class="chat-empty-hint">${i18n.t('chat.emptyState.hint')}</p>
-        `;
-        container.appendChild(emptyEl);
-      }
-      this.renderedChatCounts.set(peerId, 0);
-      return;
-    }
-
-    // 需要全量重建：强制标记、历史缩短（重试后）或容器与计数不一致（切换会话）
-    if (forceRebuild || renderedCount > messages.length || container.children.length !== renderedCount) {
-      container.innerHTML = '';
-      this.renderedChatCounts.set(peerId, 0);
-    }
-
-    // 增量追加新消息
-    let current = this.renderedChatCounts.get(peerId) || 0;
-    for (let i = current; i < messages.length; i++) {
-      container.appendChild(this.buildChatMessageElement(peerId, messages[i], i));
-    }
-    this.renderedChatCounts.set(peerId, messages.length);
-
-    // Use requestAnimationFrame to ensure DOM is fully updated before scrolling
-    // This handles async image loading and prevents race conditions
-    requestAnimationFrame(() => {
-      this.scrollChatToBottom(container);
-    });
-  }
 
   /**
    * 构建单条消息元素
    */
-  buildChatMessageElement(peerId, msg, index) {
-    const msgEl = document.createElement('div');
-    let statusClass = msg.type;
-    if (msg.sending) statusClass += ' sending';
-    if (msg.failed) statusClass += ' failed';
-    msgEl.className = `chat-message ${statusClass}`;
-
-    let statusText = this.formatTime(msg.timestamp);
-    if (msg.sending) statusText = i18n.t('chat.sending');
-    if (msg.failed) statusText = i18n.t('chat.failed');
-
-    // Check if it's an image message
-    if (msg.messageType === 'image' && msg.imageData) {
-      msgEl.innerHTML = `
-        <div class="chat-bubble-wrapper">
-          <div class="chat-bubble chat-bubble-image">
-            <img src="${msg.imageData}" alt="${i18n.t('fileTypes.image')}" loading="lazy">
-          </div>
-          <button class="chat-copy-btn" title="${i18n.t('chat.copyImage')}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="9" y="9" width="13" height="13" rx="2"/>
-              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
-            </svg>
-          </button>
-        </div>
-        <div class="chat-time">${statusText}</div>
-      `;
-
-      // Add click handler for fullscreen view
-      const img = msgEl.querySelector('.chat-bubble-image img');
-      img.addEventListener('click', () => {
-        this.showImageFullscreen(msg.imageData);
-      });
-
-      // Add copy button functionality for image
-      const copyBtn = msgEl.querySelector('.chat-copy-btn');
-      copyBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.copyImageToClipboard(msg.imageData, copyBtn);
-      });
-    } else {
-      // Text message
-      msgEl.innerHTML = `
-        <div class="chat-bubble-wrapper">
-          <div class="chat-bubble">${ui.escapeHtml(msg.text)}</div>
-          <button class="chat-copy-btn" title="${i18n.t('chat.copyMessage')}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="9" y="9" width="13" height="13" rx="2"/>
-              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
-            </svg>
-          </button>
-        </div>
-        <div class="chat-time">${statusText}</div>
-      `;
-
-      // Add copy button functionality
-      const copyBtn = msgEl.querySelector('.chat-copy-btn');
-      copyBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.copyMessageText(msg.text, copyBtn);
-      });
-    }
-
-    // Add click event for retry on failed messages
-    if (msg.failed && !msg.messageType) {
-      msgEl.style.cursor = 'pointer';
-      msgEl.addEventListener('click', () => this.retryMessage(peerId, index));
-    }
-
-    return msgEl;
-  }
 
   /**
    * Scroll chat container to bottom
    * Uses delayed scroll to handle async image loading
    */
-  scrollChatToBottom(container) {
-    if (!container) {
-      container = document.getElementById('chatMessages');
-    }
-    if (!container) return;
 
-    // Immediate scroll
-    container.scrollTop = container.scrollHeight;
 
-    // Delayed scroll to handle image loading
-    // This ensures images are loaded and scrollHeight is accurate
-    setTimeout(() => {
-      container.scrollTop = container.scrollHeight;
-    }, 50);
-  }
-
-  formatTime(timestamp) {
-    const now = Date.now();
-    const diff = now - timestamp;
-    const minutes = Math.floor(diff / 60000);
-
-    if (minutes < 1) return i18n.t('chat.justNow');
-    if (minutes < 60) return i18n.t('chat.minutesAgo', { minutes });
-
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return i18n.t('chat.hoursAgo', { hours });
-
-    const date = new Date(timestamp);
-    return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
-  }
-
-  async copyMessageText(text, btn) {
-    try {
-      await navigator.clipboard.writeText(text);
-      // Show success feedback
-      btn.classList.add('copied');
-      const originalTitle = btn.title;
-      btn.title = i18n.t('common.copied');
-      setTimeout(() => {
-        btn.classList.remove('copied');
-        btn.title = originalTitle;
-      }, 1500);
-    } catch (e) {
-      ui.showToast(i18n.t('toast.copyFailed'), 'error');
-    }
-  }
 
   /**
    * Copy image to clipboard
    * @param {string} dataUrl - Image data URL
    * @param {HTMLElement} btn - Copy button element for feedback
    */
-  async copyImageToClipboard(dataUrl, btn) {
-    try {
-      // Check if browser supports clipboard write
-      if (!navigator.clipboard || !navigator.clipboard.write || typeof ClipboardItem === 'undefined') {
-        ui.showToast(i18n.t('chat.copyNotSupported'), 'warning');
-        return;
-      }
 
-      // Convert data URL to Blob
-      const response = await fetch(dataUrl);
-      const blob = await response.blob();
 
-      // Copy as image
-      const item = new ClipboardItem({
-        [blob.type]: blob
-      });
-      await navigator.clipboard.write([item]);
-
-      // Show success feedback
-      btn.classList.add('copied');
-      const originalTitle = btn.title;
-      btn.title = i18n.t('common.copied');
-      setTimeout(() => {
-        btn.classList.remove('copied');
-        btn.title = originalTitle;
-      }, 1500);
-      ui.showToast(i18n.t('chat.imageCopied'), 'success');
-    } catch (e) {
-      console.error('Copy image failed:', e);
-      ui.showToast(i18n.t('toast.copyFailed'), 'error');
-    }
-  }
-
-  async retryMessage(peerId, messageIndex) {
-    const messages = this.getMessageHistory(peerId);
-    const msg = messages[messageIndex];
-
-    if (!msg || !msg.failed) return;
-
-    // Reset status to sending
-    msg.failed = false;
-    msg.sending = true;
-    msg.timestamp = Date.now();
-    this.renderChatHistory(peerId, true);
-
-    try {
-      await this.webrtc.sendText(peerId, msg.text);
-      // Mark as sent
-      msg.sending = false;
-      this.renderChatHistory(peerId, true);
-    } catch (e) {
-      // Mark as failed again
-      msg.sending = false;
-      msg.failed = true;
-      this.renderChatHistory(peerId, true);
-      ui.showToast(i18n.t('toast.retryFailed', { error: e.message }), 'error');
-    }
-  }
-
-  updateUnreadBadge(peerId) {
-    const count = this.unreadMessages.get(peerId) || 0;
-    const card = document.querySelector(`[data-peer-id="${peerId}"]`);
-    if (!card) return;
-
-    const button = card.querySelector('[data-action="message"]');
-    if (!button) return;
-
-    // Remove existing badge
-    const existingBadge = button.querySelector('.unread-badge');
-    if (existingBadge) existingBadge.remove();
-
-    // Add new badge if count > 0
-    if (count > 0) {
-      const badge = document.createElement('span');
-      badge.className = 'unread-badge';
-      badge.textContent = count > 99 ? '99+' : count;
-      button.appendChild(badge);
-      button.classList.add('has-unread');
-    } else {
-      button.classList.remove('has-unread');
-    }
-  }
 
   setupEventListeners() {
     const app = document.getElementById('app');
@@ -3052,68 +2473,6 @@ class CloudDrop {
   /**
    * Render trusted devices list in settings
    */
-  renderTrustedDevicesList() {
-    const container = document.getElementById('trustedDevicesList');
-    if (!container) return;
-
-    const devices = this.getTrustedDevicesList();
-
-    if (devices.length === 0) {
-      container.innerHTML = `<p class="trusted-empty">${i18n.t('settings.noTrustedDevices')}</p>`;
-      return;
-    }
-
-    const deviceTypeIcons = {
-      desktop: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>',
-      mobile: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>',
-      tablet: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M12 18h.01"/></svg>'
-    };
-
-    container.innerHTML = devices.map(device => `
-      <div class="trusted-device-item" data-fingerprint="${device.fingerprint}">
-        <div class="trusted-device-info">
-          <div class="trusted-device-icon">
-            ${deviceTypeIcons[device.deviceType] || deviceTypeIcons.desktop}
-          </div>
-          <div class="trusted-device-details">
-            <div class="trusted-device-name">${ui.escapeHtml(device.name)}</div>
-            <div class="trusted-device-meta">${device.browserInfo || i18n.t('settings.unknownBrowser')}</div>
-          </div>
-        </div>
-        <button class="btn-untrust" title="${i18n.t('settings.untrust')}" data-fingerprint="${device.fingerprint}">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M18 6L6 18M6 6l12 12"/>
-          </svg>
-        </button>
-      </div>
-    `).join('');
-
-    // Add click handlers for untrust buttons
-    container.querySelectorAll('.btn-untrust').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        const fingerprint = e.currentTarget.dataset.fingerprint;
-        const deviceInfo = this.trustedDevices.get(fingerprint);
-
-        if (!deviceInfo) return;
-
-        const confirmed = await ui.showConfirmDialog({
-          title: i18n.t('settings.untrust'),
-          message: i18n.t('settings.confirmUntrust', { name: ui.escapeHtml(deviceInfo.name) }),
-          confirmText: i18n.t('settings.untrust'),
-          cancelText: i18n.t('settings.keepTrust'),
-          type: 'warning'
-        });
-
-        if (confirmed) {
-          const info = this.removeTrustedDevice(fingerprint);
-          if (info) {
-            ui.showToast(i18n.t('toast.untrusted', { name: info.name }), 'info');
-          }
-          this.renderTrustedDevicesList();
-        }
-      });
-    });
-  }
 
   // Show mobile share modal
   showMobileShareModal() {
@@ -3155,21 +2514,6 @@ class CloudDrop {
   }
 
   // Show text input for sending
-  showTextInputForSend() {
-    if (this.peers.size === 0) {
-      ui.showToast(i18n.t('toast.noDevices'), 'warning');
-      return;
-    }
-
-    if (this.peers.size === 1) {
-      const [, peer] = [...this.peers.entries()][0];
-      this.selectedPeer = peer;
-      document.getElementById('textInput').value = '';
-      ui.showModal('textModal');
-    } else {
-      ui.showToast(i18n.t('toast.selectDeviceForText'), 'info');
-    }
-  }
 
   // Haptic feedback
   triggerHaptic(intensity = 'light') {
@@ -3245,297 +2589,32 @@ class CloudDrop {
   /**
    * 设置 Popover (桌面端) 
    */
-  setupSettingsPopover() {
-    const settingsBtn = document.getElementById('settingsBtn');
-    const settingsPopover = document.getElementById('settingsPopover');
-    const settingsPopoverClose = document.getElementById('settingsPopoverClose');
-
-    if (!settingsBtn || !settingsPopover) return;
-
-    // 打开设置 Popover
-    settingsBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      // 先同步设置值到桌面端 Popover 控件
-      this.syncSettingsToUI('popover');
-      this.syncTrustedDevicesToUI('popover');
-      settingsPopover.classList.toggle('active');
-    });
-
-    // 关闭按钮
-    settingsPopoverClose?.addEventListener('click', () => {
-      settingsPopover.classList.remove('active');
-    });
-
-    // 点击外部关闭
-    document.addEventListener('click', (e) => {
-      if (!settingsPopover.contains(e.target) && !settingsBtn.contains(e.target)) {
-        settingsPopover.classList.remove('active');
-      }
-    });
-  }
 
   /**
    * 设置控件事件监听 (移动端和桌面端)
    */
-  setupSettingsControls() {
-    // 移动端设置模态框打开时同步设置值
-    document.getElementById('navSettings')?.addEventListener('click', () => {
-      this.syncSettingsToUI('modal');
-      this.syncTrustedDevicesToUI('modal');
-    });
-
-    // Theme controls - mobile
-    const themeInputsModal = document.querySelectorAll('input[name="theme-modal"]');
-    themeInputsModal.forEach((input) => {
-      input.addEventListener('change', (e) => {
-        if (!e.target.checked) return;
-        this.updateSetting('theme', e.target.value);
-        this.syncThemeToUI('popover');
-      });
-    });
-
-    // Theme controls - desktop popover
-    const themeInputsPopover = document.querySelectorAll('input[name="theme-popover"]');
-    themeInputsPopover.forEach((input) => {
-      input.addEventListener('change', (e) => {
-        if (!e.target.checked) return;
-        this.updateSetting('theme', e.target.value);
-        this.syncThemeToUI('modal');
-      });
-    });
-
-    // 中继降级开关 - 移动端
-    const relayFallbackToggle = document.getElementById('settingsRelayFallback');
-    const relayTimeoutRow = document.getElementById('relayTimeoutRow');
-    relayFallbackToggle?.addEventListener('change', (e) => {
-      this.updateSetting('allowRelayFallback', e.target.checked);
-      if (relayTimeoutRow) {
-        relayTimeoutRow.style.display = e.target.checked ? 'flex' : 'none';
-      }
-      // 同步到桌面端
-      const popoverToggle = document.getElementById('popoverRelayFallback');
-      if (popoverToggle) popoverToggle.checked = e.target.checked;
-    });
-
-    // 中继降级开关 - 桌面端
-    const popoverRelayFallbackToggle = document.getElementById('popoverRelayFallback');
-    const popoverRelayTimeoutRow = document.getElementById('popoverRelayTimeoutRow');
-    popoverRelayFallbackToggle?.addEventListener('change', (e) => {
-      this.updateSetting('allowRelayFallback', e.target.checked);
-      if (popoverRelayTimeoutRow) {
-        popoverRelayTimeoutRow.style.display = e.target.checked ? 'flex' : 'none';
-      }
-      // 同步到移动端
-      if (relayFallbackToggle) relayFallbackToggle.checked = e.target.checked;
-    });
-
-    // 降级超时控件 - 移动端
-    const relayTimeoutSlider = document.getElementById('settingsRelayTimeoutSlider');
-    const relayTimeoutInput = document.getElementById('settingsRelayTimeout');
-
-    // 滑块拖动时同步输入框
-    relayTimeoutSlider?.addEventListener('input', (e) => {
-      const value = parseInt(e.target.value);
-      if (relayTimeoutInput) relayTimeoutInput.value = value;
-      // 同步到桌面端
-      const popoverSlider = document.getElementById('popoverRelayTimeoutSlider');
-      const popoverInput = document.getElementById('popoverRelayTimeout');
-      if (popoverSlider) popoverSlider.value = value;
-      if (popoverInput) popoverInput.value = value;
-    });
-    relayTimeoutSlider?.addEventListener('change', (e) => {
-      this.updateSetting('relayFallbackTimeout', parseInt(e.target.value));
-    });
-
-    // 输入框修改时同步滑块
-    relayTimeoutInput?.addEventListener('change', (e) => {
-      const value = this.clampTimeout(parseInt(e.target.value) || 5);
-      e.target.value = value;
-      if (relayTimeoutSlider) relayTimeoutSlider.value = value;
-      this.updateSetting('relayFallbackTimeout', value);
-      // 同步到桌面端
-      const popoverSlider = document.getElementById('popoverRelayTimeoutSlider');
-      const popoverInput = document.getElementById('popoverRelayTimeout');
-      if (popoverSlider) popoverSlider.value = value;
-      if (popoverInput) popoverInput.value = value;
-    });
-
-    // 降级超时控件 - 桌面端
-    const popoverRelayTimeoutSlider = document.getElementById('popoverRelayTimeoutSlider');
-    const popoverRelayTimeoutInput = document.getElementById('popoverRelayTimeout');
-
-    // 滑块拖动时同步输入框
-    popoverRelayTimeoutSlider?.addEventListener('input', (e) => {
-      const value = parseInt(e.target.value);
-      if (popoverRelayTimeoutInput) popoverRelayTimeoutInput.value = value;
-      // 同步到移动端
-      if (relayTimeoutSlider) relayTimeoutSlider.value = value;
-      if (relayTimeoutInput) relayTimeoutInput.value = value;
-    });
-    popoverRelayTimeoutSlider?.addEventListener('change', (e) => {
-      this.updateSetting('relayFallbackTimeout', parseInt(e.target.value));
-    });
-
-    // 输入框修改时同步滑块
-    popoverRelayTimeoutInput?.addEventListener('change', (e) => {
-      const value = this.clampTimeout(parseInt(e.target.value) || 5);
-      e.target.value = value;
-      if (popoverRelayTimeoutSlider) popoverRelayTimeoutSlider.value = value;
-      this.updateSetting('relayFallbackTimeout', value);
-      // 同步到移动端
-      if (relayTimeoutSlider) relayTimeoutSlider.value = value;
-      if (relayTimeoutInput) relayTimeoutInput.value = value;
-    });
-
-    // 连接预热开关 - 移动端
-    const prewarmToggle = document.getElementById('settingsPrewarm');
-    prewarmToggle?.addEventListener('change', (e) => {
-      this.updateSetting('enablePrewarm', e.target.checked);
-      // 同步到桌面端
-      const popoverToggle = document.getElementById('popoverPrewarm');
-      if (popoverToggle) popoverToggle.checked = e.target.checked;
-    });
-
-    // 连接预热开关 - 桌面端
-    const popoverPrewarmToggle = document.getElementById('popoverPrewarm');
-    popoverPrewarmToggle?.addEventListener('change', (e) => {
-      this.updateSetting('enablePrewarm', e.target.checked);
-      // 同步到移动端
-      if (prewarmToggle) prewarmToggle.checked = e.target.checked;
-    });
-
-    // 浏览器通知开关 - 移动端
-    const notificationsToggle = document.getElementById('settingsNotifications');
-    notificationsToggle?.addEventListener('change', async (e) => {
-      const enabled = e.target.checked;
-
-      // 如果启用，请求通知权限
-      if (enabled) {
-        const granted = await ui.requestNotificationPermission();
-        if (!granted) {
-          // 权限被拒绝，取消选中
-          e.target.checked = false;
-          ui.showToast(i18n.t('toast.notificationPermissionDenied') || '浏览器通知权限被拒绝', 'warning');
-          return;
-        }
-      }
-
-      this.updateSetting('enableNotifications', enabled);
-      // 同步到桌面端
-      const popoverToggle = document.getElementById('popoverNotifications');
-      if (popoverToggle) popoverToggle.checked = enabled;
-    });
-
-    // 浏览器通知开关 - 桌面端
-    const popoverNotificationsToggle = document.getElementById('popoverNotifications');
-    popoverNotificationsToggle?.addEventListener('change', async (e) => {
-      const enabled = e.target.checked;
-
-      // 如果启用，请求通知权限
-      if (enabled) {
-        const granted = await ui.requestNotificationPermission();
-        if (!granted) {
-          // 权限被拒绝，取消选中
-          e.target.checked = false;
-          ui.showToast(i18n.t('toast.notificationPermissionDenied') || '浏览器通知权限被拒绝', 'warning');
-          return;
-        }
-      }
-
-      this.updateSetting('enableNotifications', enabled);
-      // 同步到移动端
-      if (notificationsToggle) notificationsToggle.checked = enabled;
-    });
-  }
 
   /**
    * 同步设置值到 UI 控件
    * @param {'popover'|'modal'} target - 目标 UI
    */
-  syncSettingsToUI(target) {
-    // 中继降级开关
-    const relayToggle = document.getElementById(target === 'popover' ? 'popoverRelayFallback' : 'settingsRelayFallback');
-    if (relayToggle) relayToggle.checked = this.settings.allowRelayFallback;
-
-    // 超时控件行的显示/隐藏
-    const timeoutRow = document.getElementById(target === 'popover' ? 'popoverRelayTimeoutRow' : 'relayTimeoutRow');
-    if (timeoutRow) timeoutRow.style.display = this.settings.allowRelayFallback ? 'flex' : 'none';
-
-    // 超时滑块和输入框值
-    const timeoutSlider = document.getElementById(target === 'popover' ? 'popoverRelayTimeoutSlider' : 'settingsRelayTimeoutSlider');
-    const timeoutInput = document.getElementById(target === 'popover' ? 'popoverRelayTimeout' : 'settingsRelayTimeout');
-    if (timeoutSlider) timeoutSlider.value = this.settings.relayFallbackTimeout;
-    if (timeoutInput) timeoutInput.value = this.settings.relayFallbackTimeout;
-
-    // 预热开关
-    const prewarmToggle = document.getElementById(target === 'popover' ? 'popoverPrewarm' : 'settingsPrewarm');
-    if (prewarmToggle) prewarmToggle.checked = this.settings.enablePrewarm;
-
-    // 通知开关
-    const notificationsToggle = document.getElementById(target === 'popover' ? 'popoverNotifications' : 'settingsNotifications');
-    if (notificationsToggle) notificationsToggle.checked = this.settings.enableNotifications;
-
-    // 主题切换
-    this.syncThemeToUI(target);
-  }
 
   /**
    * 同步主题选择到 UI
    * @param {'popover'|'modal'} target - 目标 UI
    */
-  syncThemeToUI(target) {
-    const groupName = target === 'popover' ? 'theme-popover' : 'theme-modal';
-    const theme = this.settings.theme || 'system';
-    const input = document.querySelector(`input[name="${groupName}"][value="${theme}"]`);
-    if (input) input.checked = true;
-  }
 
   /**
    * 同步信任设备列表到 UI
    * @param {'popover'|'modal'} target - 目标 UI
    */
-  syncTrustedDevicesToUI(target) {
-    const containerId = target === 'popover' ? 'popoverTrustedDevicesList' : 'trustedDevicesList';
-    const container = document.getElementById(containerId);
-    if (!container) return;
-
-    const devices = this.getTrustedDevicesList();
-
-    if (devices.length === 0) {
-      container.innerHTML = `<p class="${target === 'popover' ? 'settings-popover-empty' : 'trusted-empty'}" data-i18n="settings.noTrustedDevices">${i18n.t('settings.noTrustedDevices')}</p>`;
-      return;
-    }
-
-    container.innerHTML = devices.map(device => `
-      <div class="trusted-device-item" data-fingerprint="${device.fingerprint}">
-        <div class="trusted-device-info">
-          <span class="trusted-device-name">${ui.escapeHtml(device.name)}</span>
-          <span class="trusted-device-type">${device.browserInfo || i18n.t('settings.unknownBrowser')}</span>
-        </div>
-        <button class="btn-untrust" data-fingerprint="${device.fingerprint}" title="${i18n.t('settings.untrust')}">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M18 6L6 18M6 6l12 12"/>
-          </svg>
-        </button>
-      </div>
-    `).join('');
-
-    // 添加取消信任按钮事件
-    container.querySelectorAll('.btn-untrust').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        const fingerprint = btn.dataset.fingerprint;
-        const info = this.removeTrustedDevice(fingerprint);
-        if (info) {
-          ui.showToast(i18n.t('toast.untrusted', { name: info.name }), 'info');
-        }
-        // 刷新两个列表
-        this.syncTrustedDevicesToUI('popover');
-        this.syncTrustedDevicesToUI('modal');
-      });
-    });
-  }
 }
+
+// 拆分出的模块以 mixin 方式挂载（chat.js / settings.js）
+Object.assign(CloudDrop.prototype, ChatMixin);
+Object.assign(CloudDrop.prototype, SettingsMixin);
 
 // Initialize app
 const app = new CloudDrop();
 app.init().catch(console.error);
+
