@@ -91,6 +91,11 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
   // Unified: roomId is always derived from roomCode
   roomId = `room-${roomCode.toLowerCase()}`;
 
+  // 客户端网段桶（IPv4 /24、IPv6 /64 哈希）：供房间内 per-IP 爆破计数。
+  // CF-Connecting-IP 由 Cloudflare 边缘注入，客户端无法伪造（CF- 前缀头被剥离）
+  const clientIP = request.headers.get('CF-Connecting-IP') || 'local-dev';
+  const ipBucket = await generateRoomId(clientIP);
+
   // Get or create the room Durable Object
   const roomObjectId = env.ROOM.idFromName(roomId);
   const roomStub = env.ROOM.get(roomObjectId);
@@ -101,6 +106,7 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
   // Pass room code via header so Room can include it in join response
   const headers = new Headers(request.headers);
   headers.set('X-Room-Code', roomCode);
+  headers.set('X-Client-Bucket', ipBucket);
 
   return roomStub.fetch(new Request(wsUrl.toString(), {
     headers,

@@ -36,6 +36,7 @@ interface PeerAttachment {
   isAuthenticated?: boolean;
   authChallenge?: string;
   authAttempts?: number; // Track failed attempts per connection
+  clientBucket?: string; // 客户端网段桶（/24 或 /64 哈希），per-IP 爆破计数用
 }
 
 /**
@@ -63,6 +64,7 @@ export class Room {
   private static readonly RELAY_BURST_BYTES = 4 * 1024 * 1024; // 4MB burst allowance
   private static readonly MAX_PASSWORD_ATTEMPTS = 5; // 5 attempts per connection
   private static readonly MAX_ROOM_AUTH_FAILURES = 50; // Global failures per room within window
+  private static readonly MAX_IP_AUTH_FAILURES = 10; // Per network-bucket failures within window
   private static readonly AUTH_FAILURE_WINDOW = 10 * 60 * 1000; // 10 minutes
   private static readonly SECURE_ROOM_TTL = 600000; // 10 minutes
 
@@ -205,7 +207,8 @@ export class Room {
     server.serializeAttachment({
       isAuthenticated: this.passwordHash === null,
       authChallenge: nonce,
-      authAttempts: 0
+      authAttempts: 0,
+      clientBucket: this.sanitizeString(request.headers.get('X-Client-Bucket') || '', 64)
     });
 
     // Initialize rate limiter for this connection
@@ -354,6 +357,52 @@ export class Room {
   }
 
   /**
+   * 读取某网段桶的认证失败计数（过期自动视为清零）
+   */
+  private async getBucketAuthFailures(bucket: string): Promise<{ count: number; windowStart: number }> {
+    const all = await this.state.storage.get<Record<string, { count: number; windowStart: number }>>('authFailuresByBucket') || {};
+    const now = Date.now();
+    const entry = all[bucket];
+    if (entry && (now - entry.windowStart) < Room.AUTH_FAILURE_WINDOW) {
+      return entry;
+    }
+    return { count: 0, windowStart: now };
+  }
+
+  /**
+   * 递增某网段桶的认证失败计数（清理过期条目，防存储无限增长）
+   */
+  private async incrementBucketAuthFailures(bucket: string): Promise<void> {
+    await this.state.blockConcurrencyWhile(async () => {
+      const all = await this.state.storage.get<Record<string, { count: number; windowStart: number }>>('authFailuresByBucket') || {};
+      const now = Date.now();
+
+      for (const k of Object.keys(all)) {
+        if (now - all[k].windowStart >= Room.AUTH_FAILURE_WINDOW) {
+          delete all[k];
+        }
+      }
+
+      const entry = all[bucket] || { count: 0, windowStart: now };
+      entry.count += 1;
+      entry.windowStart = now;
+      all[bucket] = entry;
+
+      await this.state.storage.put('authFailuresByBucket', all);
+    });
+  }
+
+  /**
+   * 认证成功后清除该网段桶的失败计数
+   */
+  private async clearBucketAuthFailures(bucket: string): Promise<void> {
+    const all = await this.state.storage.get<Record<string, { count: number; windowStart: number }>>('authFailuresByBucket');
+    if (!all || !all[bucket]) return;
+    delete all[bucket];
+    await this.state.storage.put('authFailuresByBucket', all);
+  }
+
+  /**
    * Check if WebSocket is rate limited (control messages only)
    */
   private isRateLimited(ws: WebSocket): boolean {
@@ -444,6 +493,18 @@ export class Room {
       return;
     }
 
+    // Per-network-bucket brute-force protection（CF-Connecting-IP 网段桶，
+    // 换连接/换 IPv6 临时地址都无法绕过；分布式换网段由全局计数兑底）
+    const clientBucket = currentAttachment?.clientBucket || '';
+    if (clientBucket) {
+      const bucketFailures = await this.getBucketAuthFailures(clientBucket);
+      if (bucketFailures.count >= Room.MAX_IP_AUTH_FAILURES) {
+        this.sendErrorFrame(ws, 'RATE_LIMIT_EXCEEDED', '尝试次数过多，请稍后再试');
+        ws.close(4002, 'RATE_LIMIT_EXCEEDED');
+        return;
+      }
+    }
+
     const authData = msg.data as { response: string };
     const expectedNonce = currentAttachment?.authChallenge;
 
@@ -464,6 +525,11 @@ export class Room {
       
       // Reset global failure counter
       await this.state.storage.delete('authFailures');
+
+      // Reset per-bucket failure counter
+      if (currentAttachment?.clientBucket) {
+        await this.clearBucketAuthFailures(currentAttachment.clientBucket);
+      }
 
       // Clear challenge and set authenticated
       ws.serializeAttachment({
@@ -488,6 +554,11 @@ export class Room {
       failures.count += 1;
       failures.windowStart = now;
       await this.state.storage.put('authFailures', failures);
+
+      // Increment per-bucket failure counter
+      if (currentAttachment?.clientBucket) {
+        await this.incrementBucketAuthFailures(currentAttachment.clientBucket);
+      }
 
       ws.serializeAttachment({
         ...currentAttachment,
