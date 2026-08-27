@@ -317,6 +317,7 @@ export class WebRTCManager {
     this.channelWaiters = new Map(); // peerId -> { promise, resolve, reject, timer }
     this.keyWaiters = new Map(); // peerId -> { promise, resolve, reject, timer }
     this.fileEndAckWaiters = new Map(); // fileId -> { resolve, timer }（接收方组装完成确认）
+    this.messageQueues = new Map(); // peerId -> Promise chain（P2P 消息顺序保障）
 
     // ICE candidate type tracking for smart fallback
     this.candidateTypes = new Map(); // peerId -> Set<'host'|'srflx'|'relay'>
@@ -887,7 +888,10 @@ export class WebRTCManager {
       this._notifyConnectionState(peerId, 'connected', null);
     };
 
-    channel.onmessage = (e) => this.handleMessage(peerId, e.data);
+    channel.onmessage = (e) => {
+      // 按 peer 串行处理：chunk 解密/落盘完成后才处理 file-end，防并发竞态
+      this._enqueueMessage(peerId, () => this.handleMessage(peerId, e.data));
+    };
 
     channel.onclose = () => {
       debugLog(`[WebRTC] DataChannel closed with ${peerId}`);
@@ -1652,15 +1656,26 @@ export class WebRTCManager {
   }
 
   /**
-   * 等待接收方对 file-end 的确认（组装完成/失败）
-   * 超时放行以兼容旧客户端
+   * 按 peer 串行化 P2P 消息处理
    */
-  _waitForFileEndAck(fileId, timeout = 30000) {
+  _enqueueMessage(peerId, task) {
+    const prev = this.messageQueues.get(peerId) || Promise.resolve();
+    const next = prev.then(task).catch((err) => {
+      debugLog(`[WebRTC] 消息处理失败 (${peerId}):`, err);
+    });
+    this.messageQueues.set(peerId, next);
+  }
+
+  /**
+   * 等待接收方对 file-end 的确认（组装完成/失败）
+   * 超时视为失败（不误报成功），避免把“接收方失联”报告为发送成功
+   */
+  _waitForFileEndAck(fileId, timeout = 60000) {
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         this.fileEndAckWaiters.delete(fileId);
-        console.warn(`[WebRTC] file-end-ack 超时（兼容旧客户端）: ${fileId}`);
-        resolve(true);
+        console.warn(`[WebRTC] file-end-ack 超时: ${fileId}`);
+        resolve(false);
       }, timeout);
       this.fileEndAckWaiters.set(fileId, { resolve, timer });
     });
@@ -2611,6 +2626,7 @@ export class WebRTCManager {
 
     // Reject pending waiters (connection is going away)
     this._rejectPeerWaiters(peerId, new Error('Connection closed'));
+    this.messageQueues.delete(peerId);
 
     // Clear timers
     if (this.disconnectedTimers.has(peerId)) {
