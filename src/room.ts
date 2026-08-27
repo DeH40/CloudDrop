@@ -17,7 +17,7 @@ export interface Env {
 }
 
 interface SignalingMessage {
-  type: 'join' | 'offer' | 'answer' | 'ice-candidate' | 'peer-joined' | 'peer-left' | 'relay-data' | 'name-changed' | 'key-exchange' | 'file-request' | 'file-response' | 'file-cancel' | 'identity-challenge' | 'identity-response' | 'auth' | 'auth-success' | 'challenge';
+  type: 'join' | 'offer' | 'answer' | 'ice-candidate' | 'peer-joined' | 'peer-left' | 'relay-data' | 'name-changed' | 'key-exchange' | 'file-request' | 'file-response' | 'file-cancel' | 'identity-challenge' | 'identity-response' | 'set-password' | 'set-password-result' | 'auth' | 'auth-success' | 'challenge';
   from?: string;
   to?: string;
   data?: unknown;
@@ -49,6 +49,7 @@ export class Room {
   private passwordHash: string | null; // Password hash for secure rooms (null = no password)
   private messageRateLimits: Map<WebSocket, { count: number; lastReset: number }> = new Map();
   private relayByteBudget: Map<WebSocket, { tokens: number; lastRefill: number }> = new Map();
+  private relayDropWarn: Map<WebSocket, number> = new Map(); // ws -> last warning timestamp
   // peerId -> WebSocket cache to avoid getWebSockets()+JSON deserialization per message.
   // Lazily rebuilt (null on hibernation wake, stale entries pruned on close).
   private peerWsCache: Map<string, WebSocket> | null = null;
@@ -61,8 +62,8 @@ export class Room {
   private static readonly RELAY_BYTES_PER_SEC = 2 * 1024 * 1024; // 2MB/s data budget for relay/ICE
   private static readonly RELAY_BURST_BYTES = 4 * 1024 * 1024; // 4MB burst allowance
   private static readonly MAX_PASSWORD_ATTEMPTS = 5; // 5 attempts per connection
-  private static readonly MAX_ROOM_AUTH_FAILURES = 20; // Global failures per room within window
-  private static readonly AUTH_FAILURE_WINDOW = 15 * 60 * 1000; // 15 minutes
+  private static readonly MAX_ROOM_AUTH_FAILURES = 50; // Global failures per room within window
+  private static readonly AUTH_FAILURE_WINDOW = 10 * 60 * 1000; // 10 minutes
   private static readonly SECURE_ROOM_TTL = 600000; // 10 minutes
 
   constructor(state: DurableObjectState, _env: Env) {
@@ -109,12 +110,13 @@ export class Room {
        // Room is empty (or only has unauthenticated ghosts) -> destroy it
        this.passwordHash = null;
        await this.state.storage.delete('passwordHash');
-       
-       // Close any remaining unauthenticated connections
-       for (const { ws } of activePeers.values()) {
-         ws.close(4000, 'Room destroyed due to inactivity');
+
+       // Close ALL connections (authenticated or not) - the room is gone.
+       // getActivePeers() only returns joined peers, so iterate sockets directly.
+       for (const ws of this.state.getWebSockets()) {
+         try { ws.close(4000, 'Room destroyed due to inactivity'); } catch (e) { /* ignore */ }
        }
-       
+
        console.log('[Room] Secure room destroyed due to inactivity');
     }
   }
@@ -124,11 +126,6 @@ export class Room {
 
     if (url.pathname === '/ws') {
       return this.handleWebSocket(request);
-    }
-
-    if (url.pathname === '/set-password') {
-      // Set room password (only if not already set)
-      return this.handleSetPassword(request);
     }
 
     if (url.pathname === '/check-password') {
@@ -151,59 +148,35 @@ export class Room {
   }
 
   /**
-   * Set room password (only if not already set)
-   * This is called by the first user who creates the room with a password
+   * 通过 WebSocket 在房间内设置密码（替代原 HTTP 端点）
+   * 要求发送者已加入房间（持有 peerId），从根本封死任意房间抢注
    */
-  private async handleSetPassword(request: Request): Promise<Response> {
-    if (request.method !== 'POST') {
-      return new Response('Method Not Allowed', { status: 405 });
+  private async handleSetPasswordViaWs(ws: WebSocket, msg: SignalingMessage): Promise<void> {
+    const attachment = ws.deserializeAttachment() as PeerAttachment | null;
+
+    // 未加入房间的连接不能设置密码
+    if (!attachment?.id) {
+      this.sendErrorFrame(ws, 'FORBIDDEN', '需要先加入房间才能设置密码');
+      return;
     }
 
-    // Only allow setting password if it's not already set
+    // 只允许首次设置
     if (this.passwordHash !== null) {
-      return new Response(JSON.stringify({
-        success: false,
-        error: 'Password already set for this room'
-      }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      this.sendErrorFrame(ws, 'PASSWORD_ALREADY_SET', '房间密码已设置');
+      return;
     }
 
-    try {
-      const body = await request.json() as { passwordHash: string };
-
-      if (!body.passwordHash || typeof body.passwordHash !== 'string') {
-        return new Response(JSON.stringify({
-          success: false,
-          error: 'Invalid password hash'
-        }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      // Store password hash
-      this.passwordHash = body.passwordHash;
-      await this.state.storage.put('passwordHash', body.passwordHash);
-
-      // Set TTL alarm
-      await this.state.storage.setAlarm(Date.now() + Room.SECURE_ROOM_TTL);
-
-      return new Response(JSON.stringify({
-        success: true
-      }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (error) {
-      return new Response(JSON.stringify({
-        success: false,
-        error: 'Invalid request body'
-      }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+    const body = msg.data as { passwordHash?: string };
+    if (!body?.passwordHash || typeof body.passwordHash !== 'string' || body.passwordHash.length > 128) {
+      this.sendErrorFrame(ws, 'INVALID_PASSWORD_HASH', '无效的密码哈希');
+      return;
     }
+
+    this.passwordHash = body.passwordHash;
+    await this.state.storage.put('passwordHash', body.passwordHash);
+    await this.state.storage.setAlarm(Date.now() + Room.SECURE_ROOM_TTL);
+
+    ws.send(JSON.stringify({ type: 'set-password-result', success: true }));
   }
 
   private handleWebSocket(request: Request): Response {
@@ -305,7 +278,18 @@ export class Room {
       //      exceeded -> identifiable error frame instead of silent drop
       if (msg.type === 'relay-data' || msg.type === 'ice-candidate') {
         if (!this.consumeRelayBudget(ws, data.length)) {
-          // Silently drop: chunk senders recover via ACK/retransmission
+          if (msg.type === 'ice-candidate') {
+            // ICE 候选被丢会伤 P2P 协商，明确告知
+            this.sendErrorFrame(ws, 'RATE_LIMIT_EXCEEDED', 'ICE candidate 发送过快');
+          } else {
+            // 分块丢弃由 ACK/重传自愈；限频告警（每秒最多一条）
+            const now = Date.now();
+            const lastWarn = this.relayDropWarn.get(ws) || 0;
+            if (now - lastWarn > 1000) {
+              this.relayDropWarn.set(ws, now);
+              this.sendErrorFrame(ws, 'RATE_LIMIT_EXCEEDED', '中继数据超速，部分分块已丢弃（将自动重传）');
+            }
+          }
           return;
         }
       } else if (this.isRateLimited(ws)) {
@@ -345,6 +329,9 @@ export class Room {
         case 'identity-challenge':
         case 'identity-response':
           await this.handleSignaling(ws, msg);
+          break;
+        case 'set-password':
+          await this.handleSetPasswordViaWs(ws, msg);
           break;
         case 'relay-data':
           await this.handleRelayData(ws, msg);
@@ -528,6 +515,7 @@ export class Room {
   async webSocketClose(ws: WebSocket, _code: number, _reason: string, _wasClean: boolean): Promise<void> {
     this.messageRateLimits.delete(ws);
     this.relayByteBudget.delete(ws);
+    this.relayDropWarn.delete(ws);
 
     // Prune the cache entry for this connection
     if (this.peerWsCache) {
@@ -548,6 +536,7 @@ export class Room {
   async webSocketError(ws: WebSocket, _error: unknown): Promise<void> {
     this.messageRateLimits.delete(ws);
     this.relayByteBudget.delete(ws);
+    this.relayDropWarn.delete(ws);
   }
 
   /**
@@ -563,6 +552,14 @@ export class Room {
    */
   private async handleJoin(ws: WebSocket, msg: SignalingMessage): Promise<void> {
     const joinData = msg.data as { name: string; deviceType: 'desktop' | 'mobile' | 'tablet'; browserInfo?: string; deviceKey?: string };
+
+    // 重复 join：先清理该连接之前的 peerId（防缓存污染 + 通知其他设备旧 ID 离开）
+    const oldAttachment = ws.deserializeAttachment() as PeerAttachment | null;
+    if (oldAttachment?.id) {
+      this.peerWsCache?.delete(oldAttachment.id);
+      this.broadcast({ type: 'peer-left', data: { id: oldAttachment.id } });
+    }
+
     const peerId = crypto.randomUUID();
 
     // Sanitize name
@@ -585,7 +582,7 @@ export class Room {
     // Store peer info in WebSocket attachment (survives hibernation)
     ws.serializeAttachment(attachment);
 
-    // Keep the peerId -> ws cache in sync
+    // Keep the peerId -> ws cache in sync（旧 ID 已在函数开头清理）
     if (!this.peerWsCache) this.rebuildPeerCache();
     this.peerWsCache?.set(peerId, ws);
 

@@ -31,6 +31,7 @@ class CloudDrop {
     this.browserInfo = ui.getDetailedDeviceInfo();
     this.messageHistory = new Map(); // peerId -> messages array
     this.renderedChatCounts = new Map(); // peerId -> 已渲染消息数（增量渲染）
+    this.renderedChatPeer = null; // 当前已渲染的会话 peerId（切换检测）
     this.currentChatPeer = null; // Currently viewing chat history
     this.unreadMessages = new Map(); // peerId -> unread count
     this.pendingFileRequest = null; // Current pending file request waiting for user decision
@@ -71,6 +72,16 @@ class CloudDrop {
     this.reconnectAttempts = 0;
     this.reconnectTimer = null;
     this.reconnectPending = false;
+
+    // 房间内设置密码（防抢注的创建流程）
+    this._setPasswordPending = false;
+    this._setPasswordResolve = null;
+
+    // 每 peer 消息队列（保证 chunk 处理完成后才处理 file-end）
+    this.peerMsgQueues = new Map();
+
+    // 下载弹窗队列（批量接收时逐个展示，避免 URL 被撤销覆盖）
+    this.downloadQueue = [];
   }
 
   /**
@@ -158,7 +169,7 @@ class CloudDrop {
    * @returns {Promise<boolean>}
    */
   async verifyPeerIdentity(peer) {
-    if (!peer.deviceKey) return true; // 旧客户端无密钥：按旧信任逻辑处理
+    if (!peer.deviceKey) return false; // 旧客户端无密钥：无法证明身份，不自动接收
     if (this.verifiedPeers.has(peer.id)) return true;
 
     const nonce = crypto.randomUUID();
@@ -274,33 +285,38 @@ class CloudDrop {
       // Generate password hash for server
       const passwordHash = await cryptoManager.hashPasswordForServer(password, roomCode);
 
-      // Set room password on server
-      const response = await fetch(`/api/room/set-password?room=${roomCode}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ passwordHash })
-      });
-
-      const result = await response.json();
-
-      if (!result.success) {
-        ui.showToast(i18n.t('errors.connectionFailed'), 'error');
-        return false;
-      }
-
-      // Set room password for client-side encryption
+      // 本地先就绪密码状态（若房间已有密码，服务端会发 challenge 走 auth 流程）
       await cryptoManager.setRoomPassword(password, roomCode);
-
-      // Store password info locally
       this.roomPassword = password;
       this.roomPasswordHash = passwordHash;
       this.isSecureRoom = true;
-
-      // Update security badge
       this.updateRoomSecurityBadge();
 
-      debugLog('[App] Secure room created:', roomCode);
-      return true;
+      // 先加入房间，再通过房间内信令设置密码（证明已在房间内，防任意抢注）
+      this._setPasswordResolve = null;
+      this._setPasswordPending = true;
+      this.switchRoom(roomCode);
+
+      const result = await new Promise((resolve) => {
+        this._setPasswordResolve = resolve;
+        setTimeout(() => resolve({ success: false, error: 'TIMEOUT' }), 8000);
+      });
+      this._setPasswordPending = false;
+      this._setPasswordResolve = null;
+
+      if (result.success) {
+        debugLog('[App] Secure room created:', roomCode);
+        return true;
+      }
+
+      // 设置失败（房间已被他人加密/超时）：清理本地状态，回到密码输入流程
+      ui.showToast(result.error === 'TIMEOUT'
+        ? i18n.t('errors.connectionFailed')
+        : i18n.t('room.passwordError'), 'error');
+      this.clearRoomPassword();
+      if (this.ws) this.ws.close(4002, 'password already set');
+      ui.showJoinRoomModal(roomCode, true);
+      return false;
     } catch (error) {
       console.error('[App] Failed to create secure room:', error);
       ui.showToast(i18n.t('errors.connectionFailed'), 'error');
@@ -753,6 +769,11 @@ class CloudDrop {
           console.warn('[App] 等待挑战超时，房间密码可能已失效，重置后重连');
           ui.showToast(i18n.t('room.roomExpired'), 'error');
           this.clearRoomPassword();
+          // 先关闭旧连接，避免旧连接的事件与新连接互相干扰
+          if (this.ws) {
+            this.ws.onclose = null;
+            this.ws.close();
+          }
           this.connectWebSocket();
         }, 8000);
       }
@@ -768,7 +789,9 @@ class CloudDrop {
           case 'PASSWORD_INCORRECT':
             ui.showToast(i18n.t('room.passwordError'), 'error');
             this.clearRoomPassword();
-            // WebSocket will be closed by server, onclose handler will show join modal
+            // 主动以 4002 关闭：服务端前 4 次错误不会关闭连接，
+            // 等待服务端关闭会卡死；onclose(4002) 会弹密码框且不自动重连
+            if (this.ws) this.ws.close(4002, 'password error');
             break;
           case 'MESSAGE_TOO_LARGE':
             ui.showToast(i18n.t('errors.messageTooLarge'), 'error');
@@ -882,7 +905,13 @@ class CloudDrop {
       // This is for backward compatibility - normally requests go through signaling
       const transfer = this.webrtc.incomingTransfers.get(peerId);
       if (transfer && transfer.confirmed) {
-        // Already confirmed via signaling, just update progress modal
+        // 用实际传输的 fileId 更新 currentTransfer（批量场景取消按钮才能取消当前文件）
+        this.currentTransfer = {
+          peerId,
+          fileId: transfer.fileId,
+          fileName: transfer.name,
+          direction: 'receive'
+        };
         const isRelayMode = this.webrtc.relayMode.get(peerId) || false;
         ui.showReceivingModal(info.name, info.size, isRelayMode ? 'relay' : 'p2p');
       }
@@ -1007,6 +1036,17 @@ class CloudDrop {
     };
   }
 
+  /**
+   * 按 peer 串行化异步消息处理（chunk -> file-end 顺序保障）
+   */
+  enqueuePeerMessage(peerId, task) {
+    const prev = this.peerMsgQueues.get(peerId) || Promise.resolve();
+    const next = prev.then(task).catch((err) => {
+      debugLog(`[App] 消息处理失败 (${peerId}):`, err);
+    });
+    this.peerMsgQueues.set(peerId, next);
+  }
+
   sendJoinMessage() {
     // 携带持久设备身份公钥，供对方做防伪造信任验证
     cryptoManager.getDevicePublicKey().then(deviceKey => {
@@ -1044,6 +1084,14 @@ class CloudDrop {
         if (this._secureJoinTimeout) {
           clearTimeout(this._secureJoinTimeout);
           this._secureJoinTimeout = null;
+        }
+        // 创建加密房间流程：加入后通过房间内信令设置密码
+        if (this._setPasswordPending && this.roomPasswordHash && this.ws) {
+          debugLog('[App] 已加入房间，发送 set-password');
+          this.ws.send(JSON.stringify({
+            type: 'set-password',
+            data: { passwordHash: this.roomPasswordHash }
+          }));
         }
         debugLog('[Signaling] My peer ID:', this.peerId);
         // Set peer ID for Perfect Negotiation pattern
@@ -1085,13 +1133,19 @@ class CloudDrop {
         this.webrtc.handleIceCandidate(msg.from, msg.data);
         break;
       case 'relay-data':
-        this.webrtc.handleRelayData(msg.from, msg.data);
+        // 按 peer 串行排队：chunk 解密/落盘完成后才处理后续 file-end
+        this.enqueuePeerMessage(msg.from, () => this.webrtc.handleRelayData(msg.from, msg.data));
         break;
       case 'key-exchange':
         this.webrtc.handleKeyExchange(msg.from, msg.data);
         break;
       case 'name-changed':
         this.handleNameChanged(msg.from, msg.data.name);
+        break;
+      case 'set-password-result':
+        if (this._setPasswordResolve) {
+          this._setPasswordResolve(msg.success ? { success: true } : { success: false, error: msg.error || 'FAILED' });
+        }
         break;
       case 'identity-challenge':
         this.handleIdentityChallenge(msg.from, msg.data);
@@ -1317,6 +1371,7 @@ class CloudDrop {
     if (peer) ui.showToast(i18n.t('toast.peerLeft', { name: peer.name }), 'info');
     this.peers.delete(peerId);
     ui.removePeerFromGrid(peerId, document.getElementById('peersGrid'));
+    this.peerMsgQueues.delete(peerId);
     this.webrtc.closeConnection(peerId);
   }
 
@@ -1468,8 +1523,17 @@ class CloudDrop {
 
   /**
    * Show file download modal (for mobile-friendly download)
+   * 批量接收时若弹窗已打开，则排队展示，避免前一文件的下载 URL 被撤销覆盖
    */
   showFileDownloadModal(fileName, blob) {
+    const modal = document.getElementById('fileDownloadModal');
+    if (modal && modal.classList.contains('active')) {
+      // 弹窗正在展示：入队，等待用户处理完当前文件
+      this.downloadQueue.push({ fileName, blob });
+      debugLog(`[App] 下载弹窗排队: ${fileName}（队列 ${this.downloadQueue.length}）`);
+      return;
+    }
+
     // Store blob URL for cleanup
     if (this._pendingDownloadUrl) {
       URL.revokeObjectURL(this._pendingDownloadUrl);
@@ -1494,7 +1558,7 @@ class CloudDrop {
   }
 
   /**
-   * Clean up download modal resources
+   * Clean up download modal resources（关闭后展示队列中的下一个文件）
    */
   cleanupDownloadModal() {
     if (this._pendingDownloadUrl) {
@@ -1503,6 +1567,12 @@ class CloudDrop {
     }
     this._pendingDownloadName = null;
     ui.hideModal('fileDownloadModal');
+
+    // 展示队列中的下一个文件
+    const next = this.downloadQueue.shift();
+    if (next) {
+      setTimeout(() => this.showFileDownloadModal(next.fileName, next.blob), 300);
+    }
   }
 
   joinRoom(code) {
@@ -1804,9 +1874,7 @@ class CloudDrop {
       if (success) {
         ui.hideModal('createSecureRoomModal');
         ui.showToast(i18n.t('room.createSuccess'), 'success');
-        // Switch to the new secure room without page refresh
-        // This preserves the password in memory so creator doesn't need to re-enter
-        this.switchRoom(roomCode);
+        // 房间切换由 createSecureRoom 内部完成（加入后通过房间内信令设置密码）
       }
     });
 
