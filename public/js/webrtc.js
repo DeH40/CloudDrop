@@ -13,7 +13,7 @@
 import { cryptoManager } from './crypto.js';
 import { chunkStore } from './chunkStore.js';
 import { debugLog } from './logger.js';
-import { WEBRTC, P2P_RETRY, RELAY, ERROR_CODES } from './config.js';
+import { WEBRTC, P2P_RETRY, RELAY, ERROR_CODES, MAX_FILE_SIZE } from './config.js';
 import { i18n } from './i18n.js';
 
 // Destructure config for convenience
@@ -318,6 +318,8 @@ export class WebRTCManager {
     this.keyWaiters = new Map(); // peerId -> { promise, resolve, reject, timer }
     this.fileEndAckWaiters = new Map(); // fileId -> { resolve, timer }（接收方组装完成确认）
     this.messageQueues = new Map(); // peerId -> Promise chain（P2P 消息顺序保障）
+    this.authorizedIncoming = new Map(); // fileId -> { peerId, name, size, mimeType, totalChunks }（用户确认过的接收）
+    this._destroyed = false; // 管理器销毁标记（拒绝迟到消息）
 
     // ICE candidate type tracking for smart fallback
     this.candidateTypes = new Map(); // peerId -> Set<'host'|'srflx'|'relay'>
@@ -1352,12 +1354,17 @@ export class WebRTCManager {
     // Clean up incoming transfer state
     const incomingTransfer = this.incomingTransfers.get(peerId);
     if (incomingTransfer && incomingTransfer.fileId === fileId) {
-      // 清理落盘分块
+      // 清理落盘分块与补发计时器
+      if (incomingTransfer.retransmitTimer) {
+        clearTimeout(incomingTransfer.retransmitTimer);
+        incomingTransfer.retransmitTimer = null;
+      }
       if (incomingTransfer.useIdb) {
         chunkStore.deleteFile(fileId).catch(() => {});
       }
       this.incomingTransfers.delete(peerId);
     }
+    this.authorizedIncoming.delete(fileId);
 
     // Also check pending file requests (cancel during confirmation wait)
     const pendingRequest = this.pendingFileRequests.get(fileId);
@@ -1420,7 +1427,9 @@ export class WebRTCManager {
 
         const chunk = file.slice(offset, offset + CHUNK_SIZE);
         const buffer = await chunk.arrayBuffer();
-        const encrypted = await cryptoManager.encryptChunk(peerId, buffer);
+        // AAD 绑定分块元数据，防换序/替换
+        const aad = `${fileId}:${chunkIndex}:${totalChunks}`;
+        const encrypted = await cryptoManager.encryptChunk(peerId, buffer, aad);
 
         while (dc.bufferedAmount > 1024 * 1024) {
           // Check cancellation during buffer wait
@@ -1539,7 +1548,9 @@ export class WebRTCManager {
 
         const chunk = file.slice(offset, offset + CHUNK_SIZE);
         const buffer = await chunk.arrayBuffer();
-        const encrypted = await cryptoManager.encryptChunk(peerId, buffer);
+        // AAD 绑定分块元数据，防换序/替换
+        const aad = `${fileId}:${chunkIndex}:${totalChunks}`;
+        const encrypted = await cryptoManager.encryptChunk(peerId, buffer, aad);
 
         const base64Data = arrayBufferToBase64(encrypted);
 
@@ -1694,6 +1705,160 @@ export class WebRTCManager {
   }
 
   /**
+   * 登记用户确认过的接收（单文件或批量每个文件都要登记）
+   */
+  authorizeIncomingTransfer(peerId, fileId, meta) {
+    this.authorizedIncoming.set(fileId, {
+      peerId,
+      name: meta.name,
+      size: meta.size,
+      mimeType: meta.mimeType || 'application/octet-stream',
+      totalChunks: meta.totalChunks
+    });
+    // 防无界增长：只保留最近 100 个授权
+    while (this.authorizedIncoming.size > 100) {
+      this.authorizedIncoming.delete(this.authorizedIncoming.keys().next().value);
+    }
+  }
+
+  /**
+   * 校验文件元数据（大小与分块数严格整数且在范围内）
+   */
+  _isValidFileMeta(size, totalChunks) {
+    return Number.isInteger(size) && size >= 0 && size <= MAX_FILE_SIZE &&
+      Number.isInteger(totalChunks) && totalChunks >= 1 &&
+      totalChunks <= Math.ceil(MAX_FILE_SIZE / CHUNK_SIZE) + 1;
+  }
+
+  /** 分块是否已收齐 */
+  _relayTransferComplete(transfer) {
+    const expectedCount = transfer.expectedCount || transfer.totalChunks;
+    const receivedCount = transfer.receivedIndices ? transfer.receivedIndices.size : 0;
+    return receivedCount >= expectedCount && transfer.received >= transfer.size;
+  }
+
+  /**
+   * 非阻塞缺块补发：发 retransmit-request 后立即返回（队列空闲，
+   * chunk 可以正常进队列）；补满后由 chunk 分支调用 _finalizeRelayTransfer。
+   * 轮次耗尽仍缺块则失败（绝不交付损坏文件）。
+   */
+  _scheduleRetransmit(peerId, transfer) {
+    const round = (transfer.retransmitRound || 0) + 1;
+    transfer.retransmitRound = round;
+
+    const expectedCount = transfer.expectedCount || transfer.totalChunks;
+    const missing = [];
+    for (let i = 0; i < expectedCount; i++) {
+      if (!transfer.receivedIndices || !transfer.receivedIndices.has(i)) {
+        missing.push(i);
+      }
+    }
+
+    if (missing.length === 0) {
+      this._finalizeRelayTransfer(peerId, transfer);
+      return;
+    }
+
+    debugLog(`[WebRTC] 补发请求 第${round}轮: ${missing.length} 个缺块 (${transfer.fileId})`);
+    this.signaling.send({
+      type: 'relay-data',
+      to: peerId,
+      data: { type: 'retransmit-request', fileId: transfer.fileId, missing }
+    });
+
+    if (transfer.retransmitTimer) clearTimeout(transfer.retransmitTimer);
+    transfer.retransmitTimer = setTimeout(() => {
+      const t = this.incomingTransfers.get(peerId);
+      if (!t || t.fileId !== transfer.fileId || !t.fileEndReceived || t.finalizing) return;
+
+      if (this._relayTransferComplete(t)) {
+        this._finalizeRelayTransfer(peerId, t);
+      } else if (round > RELAY.RETRANSMIT_ROUNDS) {
+        this._failRelayTransfer(peerId, t);
+      } else {
+        this._scheduleRetransmit(peerId, t);
+      }
+    }, RELAY.RETRANSMIT_WAIT);
+  }
+
+  /**
+   * 完成中转传输组装（校验通过才交付）
+   */
+  async _finalizeRelayTransfer(peerId, transfer) {
+    if (transfer.finalizing) return;
+    transfer.finalizing = true;
+    if (transfer.retransmitTimer) {
+      clearTimeout(transfer.retransmitTimer);
+      transfer.retransmitTimer = null;
+    }
+
+    const expectedCount = transfer.expectedCount || transfer.totalChunks;
+    const receivedCount = transfer.receivedIndices ? transfer.receivedIndices.size : 0;
+
+    // 双重校验，绝不交付不完整文件
+    if (receivedCount !== expectedCount || transfer.received !== transfer.size) {
+      transfer.finalizing = false;
+      this._failRelayTransfer(peerId, transfer);
+      return;
+    }
+
+    let blob;
+    if (transfer.useIdb) {
+      const stored = await chunkStore.getAllChunks(transfer.fileId);
+      if (stored.length !== expectedCount) {
+        transfer.finalizing = false;
+        this._failRelayTransfer(peerId, transfer);
+        return;
+      }
+      blob = new Blob(stored, { type: transfer.mimeType || 'application/octet-stream' });
+      chunkStore.deleteFile(transfer.fileId).catch(() => {});
+    } else {
+      const orderedChunks = [];
+      for (let i = 0; i < expectedCount; i++) {
+        orderedChunks.push(transfer.chunks[i]);
+      }
+      blob = new Blob(orderedChunks, { type: transfer.mimeType || 'application/octet-stream' });
+    }
+
+    debugLog(`[WebRTC] Transfer complete: ${receivedCount}/${expectedCount} chunks, size: ${blob.size}`);
+
+    // 告知发送方组装完成（批量顺序保障）
+    this.signaling.send({
+      type: 'relay-data',
+      to: peerId,
+      data: { type: 'file-end-ack', fileId: transfer.fileId, ok: true }
+    });
+
+    this.authorizedIncoming.delete(transfer.fileId);
+    if (this.onFileReceived) this.onFileReceived(peerId, transfer.name, blob);
+    this.incomingTransfers.delete(peerId);
+    this.activeTransfers.delete(transfer.fileId);
+  }
+
+  /**
+   * 中转传输失败：清计时器、落盘、告知发送方、通知 UI，绝不交付
+   */
+  _failRelayTransfer(peerId, transfer) {
+    if (transfer.retransmitTimer) {
+      clearTimeout(transfer.retransmitTimer);
+      transfer.retransmitTimer = null;
+    }
+    console.error(`[WebRTC] Transfer incomplete: expected ${transfer.expectedCount || transfer.totalChunks} chunks (${transfer.size} bytes), got ${transfer.receivedIndices?.size || 0} chunks (${transfer.received} bytes) - discarding`);
+    if (transfer.useIdb) chunkStore.deleteFile(transfer.fileId).catch(() => {});
+    this.signaling.send({
+      type: 'relay-data',
+      to: peerId,
+      data: { type: 'file-end-ack', fileId: transfer.fileId, ok: false }
+    });
+    this.authorizedIncoming.delete(transfer.fileId);
+    if (this.onTransferFailed) {
+      this.onTransferFailed(peerId, transfer.fileId, transfer.name, 'incomplete');
+    }
+    this.incomingTransfers.delete(peerId);
+    this.activeTransfers.delete(transfer.fileId);
+  }
+
+  /**
    * Send chunk acknowledgment to sender
    */
   _sendChunkAck(peerId, fileId, acks) {
@@ -1725,10 +1890,22 @@ export class WebRTCManager {
 
   // Handle incoming message
   async handleMessage(peerId, data) {
+    if (this._destroyed) return;
     if (typeof data === 'string') {
       const msg = JSON.parse(data);
 
       if (msg.type === 'file-start') {
+        // 授权校验：只接受用户确认过的传输（防未确认推送/DoS）
+        const authorized = this.authorizedIncoming.get(msg.fileId);
+        if (!authorized || authorized.peerId !== peerId) {
+          debugLog(`[WebRTC] 未授权的 P2P file-start 已拒绝: ${msg.fileId}`);
+          return;
+        }
+        if (!this._isValidFileMeta(msg.size, msg.totalChunks)) {
+          console.warn(`[WebRTC] 非法文件元数据已拒绝: ${msg.fileId}`);
+          return;
+        }
+
         // Check if we have a pre-confirmed transfer (from file-request flow)
         const existingTransfer = this.incomingTransfers.get(peerId);
 
@@ -1821,7 +1998,15 @@ export class WebRTCManager {
     } else {
       const transfer = this.incomingTransfers.get(peerId);
       if (transfer) {
-        const decrypted = await cryptoManager.decryptChunk(peerId, data);
+        // AAD 绑定（P2P 有序到达，接收序号与发送序号一致）
+        const aad = `${transfer.fileId}:${transfer.chunkCount}:${transfer.totalChunks}`;
+        let decrypted;
+        try {
+          decrypted = await cryptoManager.decryptChunk(peerId, data, aad);
+        } catch (e) {
+          console.error('[WebRTC] P2P 分块解密失败（AAD/完整性）:', e);
+          return;
+        }
         const bytes = new Uint8Array(decrypted);
 
         if (transfer.useIdb) {
@@ -1848,6 +2033,7 @@ export class WebRTCManager {
 
   // Handle incoming relay data
   async handleRelayData(peerId, data) {
+    if (this._destroyed) return;
     if (!this.relayMode.get(peerId)) {
       debugLog(`[WebRTC] Received relay data from ${peerId}, switching to relay mode`);
       this.relayMode.set(peerId, true);
@@ -1857,6 +2043,17 @@ export class WebRTCManager {
     }
 
     if (data.type === 'file-start') {
+      // 授权校验：只接受用户确认过的传输（防未确认推送/DoS）
+      const authorized = this.authorizedIncoming.get(data.fileId);
+      if (!authorized || authorized.peerId !== peerId) {
+        debugLog(`[WebRTC] 未授权的 relay file-start 已拒绝: ${data.fileId}`);
+        return;
+      }
+      if (!this._isValidFileMeta(data.size, data.totalChunks)) {
+        console.warn(`[WebRTC] 非法文件元数据已拒绝: ${data.fileId}`);
+        return;
+      }
+
       // Check if we have a pre-confirmed transfer (from file-request flow)
       const existingTransfer = this.incomingTransfers.get(peerId);
 
@@ -1908,101 +2105,25 @@ export class WebRTCManager {
       this.handleFileCancel(peerId, data);
     } else if (data.type === 'file-end') {
       const transfer = this.incomingTransfers.get(peerId);
-      if (transfer) {
+      if (transfer && transfer.fileId === data.fileId) {
+        // 非阻塞状态机：缺块时发起补发并立即返回，让后续 chunk 消息能进队列
+        transfer.fileEndReceived = true;
+        transfer.expectedCount = data.totalChunks || transfer.totalChunks;
+
         // Send any remaining ACKs immediately
         if (transfer.pendingAcks && transfer.pendingAcks.length > 0) {
           this._sendChunkAck(peerId, transfer.fileId, transfer.pendingAcks);
           transfer.pendingAcks = [];
         }
 
-        // Verify integrity: check all chunks are present
-        const expectedCount = data.totalChunks || transfer.totalChunks;
-        let receivedCount = transfer.receivedIndices ? transfer.receivedIndices.size : 0;
-
-        const collectMissing = () => {
-          const missing = [];
-          for (let i = 0; i < expectedCount; i++) {
-            if (!transfer.receivedIndices || !transfer.receivedIndices.has(i)) {
-              missing.push(i);
-            }
-          }
-          return missing;
-        };
-
-        const waitForChunks = (ms) => new Promise(resolve => {
-          const waitStart = Date.now();
-          const checkInterval = setInterval(() => {
-            receivedCount = transfer.receivedIndices ? transfer.receivedIndices.size : 0;
-            if (receivedCount >= expectedCount || Date.now() - waitStart > ms) {
-              clearInterval(checkInterval);
-              resolve();
-            }
-          }, 100);
-        });
-
-        // Wait for in-flight chunks, then request retransmission of missing ones
-        if (receivedCount < expectedCount) {
-          debugLog(`[WebRTC] Waiting for in-flight chunks: ${receivedCount}/${expectedCount}`);
-          await waitForChunks(RELAY.RETRANSMIT_WAIT);
-
-          for (let round = 0; round < RELAY.RETRANSMIT_ROUNDS && receivedCount < expectedCount; round++) {
-            const missing = collectMissing();
-            if (missing.length === 0) break;
-            debugLog(`[WebRTC] Requesting retransmission of ${missing.length} chunks (round ${round + 1}/${RELAY.RETRANSMIT_ROUNDS})`);
-            this.signaling.send({
-              type: 'relay-data',
-              to: peerId,
-              data: { type: 'retransmit-request', fileId: transfer.fileId, missing }
-            });
-            await waitForChunks(RELAY.RETRANSMIT_WAIT);
-          }
-        }
-
-        // NEVER deliver an incomplete/corrupt file - fail the transfer instead
-        if (receivedCount !== expectedCount || transfer.received !== transfer.size) {
-          console.error(`[WebRTC] Transfer incomplete: expected ${expectedCount} chunks (${transfer.size} bytes), got ${receivedCount} chunks (${transfer.received} bytes) - discarding`);
-          if (transfer.useIdb) chunkStore.deleteFile(transfer.fileId).catch(() => {});
-          // 告知发送方组装失败（批量发送会中止后续文件）
-          this.signaling.send({
-            type: 'relay-data',
-            to: peerId,
-            data: { type: 'file-end-ack', fileId: transfer.fileId, ok: false }
-          });
-          if (this.onTransferFailed) {
-            this.onTransferFailed(peerId, transfer.fileId, transfer.name, 'incomplete');
-          }
-          this.incomingTransfers.delete(peerId);
-          this.activeTransfers.delete(transfer.fileId);
-          return;
-        }
-
-        // Build blob from chunks in correct order
-        let blob;
-        if (transfer.useIdb) {
-          const stored = await chunkStore.getAllChunks(transfer.fileId);
-          blob = new Blob(stored, { type: transfer.mimeType || 'application/octet-stream' });
-          chunkStore.deleteFile(transfer.fileId).catch(() => {});
+        if (this._relayTransferComplete(transfer)) {
+          await this._finalizeRelayTransfer(peerId, transfer);
         } else {
-          const orderedChunks = [];
-          for (let i = 0; i < expectedCount; i++) {
-            orderedChunks.push(transfer.chunks[i]);
-          }
-          blob = new Blob(orderedChunks, { type: transfer.mimeType || 'application/octet-stream' });
+          // 先等一小段时间让在途分块到达，再发起补发（非阻塞定时器）
+          this._scheduleRetransmit(peerId, transfer);
         }
-
-        debugLog(`[WebRTC] Transfer complete: ${receivedCount}/${expectedCount} chunks, size: ${blob.size}`);
-
-        // 告知发送方组装完成（批量顺序保障）
-        this.signaling.send({
-          type: 'relay-data',
-          to: peerId,
-          data: { type: 'file-end-ack', fileId: transfer.fileId, ok: true }
-        });
-
-        if (this.onFileReceived) this.onFileReceived(peerId, transfer.name, blob);
-        this.incomingTransfers.delete(peerId);
-        this.activeTransfers.delete(transfer.fileId);
       }
+    }
     } else if (data.type === 'retransmit-request') {
       // Receiver asked for chunks missing at its end - resend if state still held
       const transfer = this.activeTransfers.get(data.fileId);
@@ -2023,7 +2144,13 @@ export class WebRTCManager {
     } else if (data.type === 'chunk') {
       const transfer = this.incomingTransfers.get(peerId);
       if (transfer && transfer.fileId === data.fileId) {
-        const chunkIndex = data.index !== undefined ? data.index : (transfer.chunkCount || 0);
+        const chunkIndex = data.index;
+
+        // 严格校验索引范围，防构造超大稀疏数组
+        if (!Number.isInteger(chunkIndex) || chunkIndex < 0 || chunkIndex >= transfer.totalChunks) {
+          debugLog(`[WebRTC] 非法分块索引已丢弃: ${chunkIndex}`);
+          return;
+        }
 
         // Skip duplicate chunks (from retransmission)
         if (transfer.receivedIndices && transfer.receivedIndices.has(chunkIndex)) {
@@ -2036,7 +2163,9 @@ export class WebRTCManager {
         try {
           const bytes = base64ToUint8Array(data.data);
 
-          const decrypted = await cryptoManager.decryptChunk(peerId, bytes.buffer);
+          // AAD 绑定元数据：换序/替换分块会解密失败
+          const aad = `${data.fileId}:${chunkIndex}:${transfer.totalChunks}`;
+          const decrypted = await cryptoManager.decryptChunk(peerId, bytes.buffer, aad);
 
           // Place chunk in correct position (IDB 落盘或内存数组)
           if (transfer.useIdb) {
@@ -2069,11 +2198,17 @@ export class WebRTCManager {
               speed: transfer.received / elapsed
             });
           }
+
+          // file-end 已到且缺口补齐：在队列内直接完成组装（串行安全）
+          if (transfer.fileEndReceived && this._relayTransferComplete(transfer)) {
+            await this._finalizeRelayTransfer(peerId, transfer);
+          }
         } catch (err) {
           console.error(`[WebRTC] Error processing chunk ${chunkIndex}:`, err);
           // Request retransmission by not sending ACK
         }
       }
+    }
     } else if (data.type === 'ack') {
       // Handle ACK from receiver
       this.handleRelayAck(peerId, data);
@@ -2115,9 +2250,14 @@ export class WebRTCManager {
     const encrypted = await cryptoManager.encryptText(peerId, text);
     const payload = JSON.stringify({ type: 'text', content: encrypted, isEncrypted: true });
 
-    // Pre-check: oversized messages fail loudly instead of silently breaking
-    // the data channel (or being dropped by the relay server)
-    if (payload.length > MAX_TEXT_PAYLOAD) {
+    // Pre-check: use the connection's SCTP max message size when available
+    // (浏览器实现有差异，固定 200KB 在部分浏览器仍会发送失败)
+    const pc = this.connections.get(peerId);
+    const maxPayload = (pc && pc.sctp && pc.sctp.maxMessageSize)
+      ? Math.floor(pc.sctp.maxMessageSize * 0.9)
+      : MAX_TEXT_PAYLOAD;
+
+    if (payload.length > maxPayload) {
       throw new Error(ERROR_CODES.MESSAGE_TOO_LARGE);
     }
 
@@ -2256,6 +2396,23 @@ export class WebRTCManager {
       clearTimeout(waiter.timer);
       this.keyWaiters.delete(peerId);
       waiter.resolve();
+    }
+  }
+
+  /**
+   * Reject all waiters across all peers (manager teardown)
+   */
+  _rejectAllWaiters(error) {
+    for (const mapKey of ['channelWaiters', 'keyWaiters']) {
+      for (const [key, waiter] of this[mapKey].entries()) {
+        clearTimeout(waiter.timer);
+        try { waiter.reject(error); } catch (e) { /* ignore */ }
+      }
+      this[mapKey].clear();
+    }
+    // 补发定时器
+    for (const [peerId, transfer] of this.incomingTransfers.entries()) {
+      if (transfer.retransmitTimer) clearTimeout(transfer.retransmitTimer);
     }
   }
 
@@ -2679,17 +2836,29 @@ export class WebRTCManager {
    * timers and in-flight promises can't leak into the new instance's UI.
    */
   destroy() {
+    this._destroyed = true; // 拒绝一切迟到消息
+
     // Stop pending timers
     for (const timer of this.disconnectedTimers.values()) clearTimeout(timer);
     for (const timer of this.p2pRetryTimers.values()) clearTimeout(timer);
-    for (const waiter of this.fileEndAckWaiters.values()) {
-      clearTimeout(waiter.timer);
-      waiter.resolve(true);
-    }
     this.disconnectedTimers.clear();
     this.p2pRetryTimers.clear();
     this.p2pRetryAttempts.clear();
+
+    // 所有等待者一律以失败结束，不误报成功
+    for (const waiter of this.fileEndAckWaiters.values()) {
+      clearTimeout(waiter.timer);
+      waiter.resolve(false);
+    }
     this.fileEndAckWaiters.clear();
+    this._rejectAllWaiters(new Error('Manager destroyed'));
+
+    // 未决的文件确认请求全部终止
+    for (const [fileId, pending] of this.pendingFileRequests.entries()) {
+      try { pending.reject(new Error(ERROR_CODES.FILE_CANCELLED)); } catch (e) { /* ignore */ }
+    }
+    this.pendingFileRequests.clear();
+    this.authorizedIncoming.clear();
 
     // Close all connections and clean up state
     this.closeAll();
