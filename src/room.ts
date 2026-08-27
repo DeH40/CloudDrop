@@ -527,11 +527,12 @@ export class Room {
 
   /**
    * WebSocket error handler (Hibernation API)
+   * Note: a close event always follows an error - peer-left is handled once
+   * in webSocketClose to avoid duplicate broadcasts.
    */
   async webSocketError(ws: WebSocket, _error: unknown): Promise<void> {
     this.messageRateLimits.delete(ws);
     this.relayByteBudget.delete(ws);
-    await this.handleLeave(ws);
   }
 
   /**
