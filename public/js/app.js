@@ -27,6 +27,7 @@ class CloudDrop {
     this.roomCode = null;
     this.browserInfo = ui.getDetailedDeviceInfo();
     this.messageHistory = new Map(); // peerId -> messages array
+    this.renderedChatCounts = new Map(); // peerId -> 已渲染消息数（增量渲染）
     this.currentChatPeer = null; // Currently viewing chat history
     this.unreadMessages = new Map(); // peerId -> unread count
     this.pendingFileRequest = null; // Current pending file request waiting for user decision
@@ -1723,101 +1724,125 @@ class CloudDrop {
     this.currentChatPeer = null;
   }
 
-  renderChatHistory(peerId) {
+  /**
+   * 渲染聊天历史：新消息增量追加，状态变更/面板切换时全量重建
+   * @param {string} peerId
+   * @param {boolean} forceRebuild - 强制全量重建（如消息状态变更）
+   */
+  renderChatHistory(peerId, forceRebuild = false) {
     const messages = this.getMessageHistory(peerId);
     const container = document.getElementById('chatMessages');
-    container.innerHTML = '';
+    const renderedCount = this.renderedChatCounts.get(peerId) || 0;
 
+    // 空历史：只渲染一次空状态
     if (messages.length === 0) {
-      // Empty state
-      const emptyEl = document.createElement('div');
-      emptyEl.className = 'chat-empty-state';
-      emptyEl.innerHTML = `
-        <div class="chat-empty-icon">${i18n.t('chat.emptyState.icon')}</div>
-        <p class="chat-empty-text">${i18n.t('chat.emptyState.text')}</p>
-        <p class="chat-empty-hint">${i18n.t('chat.emptyState.hint')}</p>
-      `;
-      container.appendChild(emptyEl);
+      if (container.children.length === 0) {
+        const emptyEl = document.createElement('div');
+        emptyEl.className = 'chat-empty-state';
+        emptyEl.innerHTML = `
+          <div class="chat-empty-icon">${i18n.t('chat.emptyState.icon')}</div>
+          <p class="chat-empty-text">${i18n.t('chat.emptyState.text')}</p>
+          <p class="chat-empty-hint">${i18n.t('chat.emptyState.hint')}</p>
+        `;
+        container.appendChild(emptyEl);
+      }
+      this.renderedChatCounts.set(peerId, 0);
       return;
     }
 
-    messages.forEach((msg, index) => {
-      const msgEl = document.createElement('div');
-      let statusClass = msg.type;
-      if (msg.sending) statusClass += ' sending';
-      if (msg.failed) statusClass += ' failed';
-      msgEl.className = `chat-message ${statusClass}`;
+    // 需要全量重建：强制标记、历史缩短（重试后）或容器与计数不一致（切换会话）
+    if (forceRebuild || renderedCount > messages.length || container.children.length !== renderedCount) {
+      container.innerHTML = '';
+      this.renderedChatCounts.set(peerId, 0);
+    }
 
-      let statusText = this.formatTime(msg.timestamp);
-      if (msg.sending) statusText = i18n.t('chat.sending');
-      if (msg.failed) statusText = i18n.t('chat.failed');
-
-      // Check if it's an image message
-      if (msg.messageType === 'image' && msg.imageData) {
-        msgEl.innerHTML = `
-          <div class="chat-bubble-wrapper">
-            <div class="chat-bubble chat-bubble-image">
-              <img src="${msg.imageData}" alt="${i18n.t('fileTypes.image')}" loading="lazy">
-            </div>
-            <button class="chat-copy-btn" title="${i18n.t('chat.copyImage')}">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="9" y="9" width="13" height="13" rx="2"/>
-                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
-              </svg>
-            </button>
-          </div>
-          <div class="chat-time">${statusText}</div>
-        `;
-
-        // Add click handler for fullscreen view
-        const img = msgEl.querySelector('.chat-bubble-image img');
-        img.addEventListener('click', () => {
-          this.showImageFullscreen(msg.imageData);
-        });
-
-        // Add copy button functionality for image
-        const copyBtn = msgEl.querySelector('.chat-copy-btn');
-        copyBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this.copyImageToClipboard(msg.imageData, copyBtn);
-        });
-      } else {
-        // Text message
-        msgEl.innerHTML = `
-          <div class="chat-bubble-wrapper">
-            <div class="chat-bubble">${ui.escapeHtml(msg.text)}</div>
-            <button class="chat-copy-btn" title="${i18n.t('chat.copyMessage')}">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="9" y="9" width="13" height="13" rx="2"/>
-                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
-              </svg>
-            </button>
-          </div>
-          <div class="chat-time">${statusText}</div>
-        `;
-
-        // Add copy button functionality
-        const copyBtn = msgEl.querySelector('.chat-copy-btn');
-        copyBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this.copyMessageText(msg.text, copyBtn);
-        });
-      }
-
-      // Add click event for retry on failed messages
-      if (msg.failed && !msg.messageType) {
-        msgEl.style.cursor = 'pointer';
-        msgEl.addEventListener('click', () => this.retryMessage(peerId, index));
-      }
-
-      container.appendChild(msgEl);
-    });
+    // 增量追加新消息
+    let current = this.renderedChatCounts.get(peerId) || 0;
+    for (let i = current; i < messages.length; i++) {
+      container.appendChild(this.buildChatMessageElement(peerId, messages[i], i));
+    }
+    this.renderedChatCounts.set(peerId, messages.length);
 
     // Use requestAnimationFrame to ensure DOM is fully updated before scrolling
     // This handles async image loading and prevents race conditions
     requestAnimationFrame(() => {
       this.scrollChatToBottom(container);
     });
+  }
+
+  /**
+   * 构建单条消息元素
+   */
+  buildChatMessageElement(peerId, msg, index) {
+    const msgEl = document.createElement('div');
+    let statusClass = msg.type;
+    if (msg.sending) statusClass += ' sending';
+    if (msg.failed) statusClass += ' failed';
+    msgEl.className = `chat-message ${statusClass}`;
+
+    let statusText = this.formatTime(msg.timestamp);
+    if (msg.sending) statusText = i18n.t('chat.sending');
+    if (msg.failed) statusText = i18n.t('chat.failed');
+
+    // Check if it's an image message
+    if (msg.messageType === 'image' && msg.imageData) {
+      msgEl.innerHTML = `
+        <div class="chat-bubble-wrapper">
+          <div class="chat-bubble chat-bubble-image">
+            <img src="${msg.imageData}" alt="${i18n.t('fileTypes.image')}" loading="lazy">
+          </div>
+          <button class="chat-copy-btn" title="${i18n.t('chat.copyImage')}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2"/>
+              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+            </svg>
+          </button>
+        </div>
+        <div class="chat-time">${statusText}</div>
+      `;
+
+      // Add click handler for fullscreen view
+      const img = msgEl.querySelector('.chat-bubble-image img');
+      img.addEventListener('click', () => {
+        this.showImageFullscreen(msg.imageData);
+      });
+
+      // Add copy button functionality for image
+      const copyBtn = msgEl.querySelector('.chat-copy-btn');
+      copyBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.copyImageToClipboard(msg.imageData, copyBtn);
+      });
+    } else {
+      // Text message
+      msgEl.innerHTML = `
+        <div class="chat-bubble-wrapper">
+          <div class="chat-bubble">${ui.escapeHtml(msg.text)}</div>
+          <button class="chat-copy-btn" title="${i18n.t('chat.copyMessage')}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2"/>
+              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+            </svg>
+          </button>
+        </div>
+        <div class="chat-time">${statusText}</div>
+      `;
+
+      // Add copy button functionality
+      const copyBtn = msgEl.querySelector('.chat-copy-btn');
+      copyBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.copyMessageText(msg.text, copyBtn);
+      });
+    }
+
+    // Add click event for retry on failed messages
+    if (msg.failed && !msg.messageType) {
+      msgEl.style.cursor = 'pointer';
+      msgEl.addEventListener('click', () => this.retryMessage(peerId, index));
+    }
+
+    return msgEl;
   }
 
   /**
@@ -1919,18 +1944,18 @@ class CloudDrop {
     msg.failed = false;
     msg.sending = true;
     msg.timestamp = Date.now();
-    this.renderChatHistory(peerId);
+    this.renderChatHistory(peerId, true);
 
     try {
       await this.webrtc.sendText(peerId, msg.text);
       // Mark as sent
       msg.sending = false;
-      this.renderChatHistory(peerId);
+      this.renderChatHistory(peerId, true);
     } catch (e) {
       // Mark as failed again
       msg.sending = false;
       msg.failed = true;
-      this.renderChatHistory(peerId);
+      this.renderChatHistory(peerId, true);
       ui.showToast(i18n.t('toast.retryFailed', { error: e.message }), 'error');
     }
   }
