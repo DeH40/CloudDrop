@@ -180,7 +180,8 @@
     "autoAssigning": "Attribution automatique...",
     "switchedToRoom": "Passage à la nouvelle salle : {{room}}",
     "autoAssigned": "Rejoint la salle {{room}}, partagez le code de salle avec d'autres appareils",
-    "roomExpired": "Le mot de passe de la salle a expiré, retour à une salle normale"
+    "roomExpired": "Le mot de passe de la salle a expiré, retour à une salle normale",
+    "roomLockedByOther": "Un autre appareil a protégé la salle par mot de passe. Saisissez-le pour la rejoindre"
   },
   "share": {
     "title": "Partager la salle",
@@ -222,7 +223,8 @@
     "copyNotSupported": "Votre navigateur ne supporte pas la copie d'images, veuillez faire un clic droit pour copier manuellement",
     "imageCopied": "Image copiée dans le presse-papiers",
     "undecryptable": "[Message non déchiffrable]",
-    "undecryptableRelay": "[Message de relais non déchiffrable]"
+    "undecryptableRelay": "[Message de relais non déchiffrable]",
+    "invalidImage": "[Données d'image invalides]"
   },
   "download": {
     "title": "Fichier reçu",

@@ -180,7 +180,8 @@
     "clickToCreateSecure": "Click to create encrypted room",
     "autoAssigning": "Auto assigning...",
     "switchedToRoom": "Switched to new room: {{room}}",
-    "autoAssigned": "Joined room {{room}}, share the room code with other devices"
+    "autoAssigned": "Joined room {{room}}, share the room code with other devices",
+    "roomLockedByOther": "Room has been locked with a password by another device. Please enter the password to rejoin."
   },
   "share": {
     "title": "Share Room",
@@ -222,7 +223,8 @@
     "copyNotSupported": "Your browser doesn't support copying images, please right-click to copy manually",
     "imageCopied": "Image copied to clipboard",
     "undecryptable": "[Undecryptable Message]",
-    "undecryptableRelay": "[Undecryptable Relay Message]"
+    "undecryptableRelay": "[Undecryptable Relay Message]",
+    "invalidImage": "[Invalid image data]"
   },
   "download": {
     "title": "File Received",

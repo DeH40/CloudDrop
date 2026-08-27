@@ -27,3 +27,6 @@ jobs:
       - name: JS syntax check (frontend)
         run: |
           for f in public/js/*.js; do node --check "$f" || exit 1; done
+
+      - name: Unit tests (node:test)
+        run: npm test

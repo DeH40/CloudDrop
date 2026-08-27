@@ -178,7 +178,8 @@
     "autoAssigning": "自動割り当て中...",
     "switchedToRoom": "新しいルームに切り替えました: {{room}}",
     "autoAssigned": "ルーム{{room}}に参加しました。他のデバイスとルームコードを共有してください",
-    "roomExpired": "ルームのパスワードが期限切れになり、通常のルームに戻りました"
+    "roomExpired": "ルームのパスワードが期限切れになり、通常のルームに戻りました",
+    "roomLockedByOther": "他のデバイスが部屋にパスワードを設定しました。再参加するにはパスワードを入力してください"
   },
   "share": {
     "title": "ルームを共有",
@@ -220,7 +221,8 @@
     "copyNotSupported": "お使いのブラウザは画像のコピーをサポートしていません。右クリックして手動でコピーしてください",
     "imageCopied": "画像をクリップボードにコピーしました",
     "undecryptable": "[復号できないメッセージ]",
-    "undecryptableRelay": "[復号できないリレーメッセージ]"
+    "undecryptableRelay": "[復号できないリレーメッセージ]",
+    "invalidImage": "[無効な画像データ]"
   },
   "download": {
     "title": "ファイルを受信しました",

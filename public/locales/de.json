@@ -180,7 +180,8 @@
     "autoAssigning": "Automatische Zuweisung...",
     "switchedToRoom": "Zu neuem Raum gewechselt: {{room}}",
     "autoAssigned": "Raum {{room}} beigetreten, teilen Sie den Raumcode mit anderen Geräten",
-    "roomExpired": "Raumpasswort abgelaufen, zurück zu einem normalen Raum"
+    "roomExpired": "Raumpasswort abgelaufen, zurück zu einem normalen Raum",
+    "roomLockedByOther": "Ein anderes Gerät hat den Raum mit einem Passwort geschützt. Bitte Passwort eingeben"
   },
   "share": {
     "title": "Raum teilen",
@@ -222,7 +223,8 @@
     "copyNotSupported": "Ihr Browser unterstützt das Kopieren von Bildern nicht, bitte klicken Sie mit der rechten Maustaste, um manuell zu kopieren",
     "imageCopied": "Bild in die Zwischenablage kopiert",
     "undecryptable": "[Unentschlüsselbare Nachricht]",
-    "undecryptableRelay": "[Unentschlüsselbare Relay-Nachricht]"
+    "undecryptableRelay": "[Unentschlüsselbare Relay-Nachricht]",
+    "invalidImage": "[Ungültige Bilddaten]"
   },
   "download": {
     "title": "Datei empfangen",

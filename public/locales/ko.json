@@ -178,7 +178,8 @@
     "autoAssigning": "자동 할당 중...",
     "switchedToRoom": "새 방으로 전환됨: {{room}}",
     "autoAssigned": "방 {{room}}에 참가했습니다. 다른 기기와 방 코드를 공유하세요",
-    "roomExpired": "방 비밀번호가 만료되어 일반 방으로 되돌아갔습니다"
+    "roomExpired": "방 비밀번호가 만료되어 일반 방으로 되돌아갔습니다",
+    "roomLockedByOther": "다른 기기가 방에 비밀번호를 설정했습니다. 다시 참여하려면 비밀번호를 입력하세요"
   },
   "share": {
     "title": "방 공유",
@@ -220,7 +221,8 @@
     "copyNotSupported": "브라우저가 이미지 복사를 지원하지 않습니다. 우클릭하여 수동으로 복사하세요",
     "imageCopied": "이미지가 클립보드에 복사됨",
     "undecryptable": "[복호화할 수 없는 메시지]",
-    "undecryptableRelay": "[복호화할 수 없는 릴레이 메시지]"
+    "undecryptableRelay": "[복호화할 수 없는 릴레이 메시지]",
+    "invalidImage": "[잘못된 이미지 데이터]"
   },
   "download": {
     "title": "파일 수신 완료",

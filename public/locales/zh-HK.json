@@ -178,7 +178,8 @@
     "autoAssigning": "自動分配中...",
     "switchedToRoom": "已切換到新房間: {{room}}",
     "autoAssigned": "已加入房間 {{room}}，請分享房間號給其他設備",
-    "roomExpired": "房間密碼已過期，已恢復為普通房間"
+    "roomExpired": "房間密碼已過期，已恢復為普通房間",
+    "roomLockedByOther": "其他裝置已為房間設定密碼，請輸入密碼重新加入"
   },
   "share": {
     "title": "分享房間",
@@ -220,7 +221,8 @@
     "copyNotSupported": "目前瀏覽器不支援複製圖片，請右鍵圖片自行複製",
     "imageCopied": "圖片已複製到剪貼板",
     "undecryptable": "[無法解密的消息]",
-    "undecryptableRelay": "[無法解密的中繼消息]"
+    "undecryptableRelay": "[無法解密的中繼消息]",
+    "invalidImage": "[無效的圖片資料]"
   },
   "download": {
     "title": "文件接收完成",

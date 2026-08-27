@@ -178,7 +178,8 @@
     "clickToCreateSecure": "点击创建加密房间",
     "autoAssigning": "自动分配中...",
     "switchedToRoom": "已切换到新房间: {{room}}",
-    "autoAssigned": "已加入房间 {{room}},请分享房间号给其他设备"
+    "autoAssigned": "已加入房间 {{room}},请分享房间号给其他设备",
+    "roomLockedByOther": "其他设备已为房间设置密码，请输入密码重新加入"
   },
   "share": {
     "title": "分享房间",
@@ -220,7 +221,8 @@
     "copyNotSupported": "当前浏览器不支持复制图片,请右键图片自行复制",
     "imageCopied": "图片已复制到剪贴板",
     "undecryptable": "[无法解密的消息]",
-    "undecryptableRelay": "[无法解密的中继消息]"
+    "undecryptableRelay": "[无法解密的中继消息]",
+    "invalidImage": "[无效的图片数据]"
   },
   "download": {
     "title": "文件接收完成",
