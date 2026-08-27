@@ -471,6 +471,9 @@ class CloudDrop {
         ui.showJoinRoomModal(this.roomCode, true); // true = password required
         // Will connect after user enters password
         this.setupEventListeners(); // Setup listeners so modal works
+        // 两条启动路径都需要完整的 UI 初始化（历史 bug：此处提前 return
+        // 导致设备名显示 -、ESC 失效、移动端键盘适配失效）
+        await this.bootstrapUI();
         return;
       }
     }
@@ -478,6 +481,13 @@ class CloudDrop {
     this.updateRoomDisplay();
     this.connectWebSocket();
     this.setupEventListeners();
+    await this.bootstrapUI();
+  }
+
+  /**
+   * UI 初始化（普通房间与加密房间两条启动路径共用）
+   */
+  async bootstrapUI() {
     ui.setupModalCloseHandlers();
     ui.updateEmptyState();
     this.updateDeviceNameDisplay();
