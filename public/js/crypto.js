@@ -168,11 +168,16 @@ export class CryptoManager {
     // Generate random IV for each encryption
     const iv = crypto.getRandomValues(new Uint8Array(12));
 
+    // AAD 必须是 BufferSource；字符串统一转 UTF-8 字节
+    const aad = (additionalData === undefined || additionalData === null)
+      ? undefined
+      : (typeof additionalData === 'string' ? new TextEncoder().encode(additionalData) : additionalData);
+
     const encrypted = await crypto.subtle.encrypt(
       {
         name: 'AES-GCM',
         iv: iv,
-        additionalData: additionalData
+        additionalData: aad
       },
       sharedKey,
       data
@@ -194,11 +199,16 @@ export class CryptoManager {
       throw new Error(`No shared key for peer: ${peerId}`);
     }
 
+    // AAD 必须是 BufferSource；字符串统一转 UTF-8 字节
+    const aad = (additionalData === undefined || additionalData === null)
+      ? undefined
+      : (typeof additionalData === 'string' ? new TextEncoder().encode(additionalData) : additionalData);
+
     const decrypted = await crypto.subtle.decrypt(
       {
         name: 'AES-GCM',
         iv: iv,
-        additionalData: additionalData
+        additionalData: aad
       },
       sharedKey,
       encryptedData
