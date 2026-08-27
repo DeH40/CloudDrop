@@ -17,7 +17,7 @@ export interface Env {
 }
 
 interface SignalingMessage {
-  type: 'join' | 'offer' | 'answer' | 'ice-candidate' | 'peer-joined' | 'peer-left' | 'relay-data' | 'name-changed' | 'key-exchange' | 'file-request' | 'file-response' | 'file-cancel' | 'auth' | 'auth-success' | 'challenge';
+  type: 'join' | 'offer' | 'answer' | 'ice-candidate' | 'peer-joined' | 'peer-left' | 'relay-data' | 'name-changed' | 'key-exchange' | 'file-request' | 'file-response' | 'file-cancel' | 'identity-challenge' | 'identity-response' | 'auth' | 'auth-success' | 'challenge';
   from?: string;
   to?: string;
   data?: unknown;
@@ -31,6 +31,7 @@ interface PeerAttachment {
   name?: string;
   deviceType?: 'desktop' | 'mobile' | 'tablet';
   browserInfo?: string;
+  deviceKey?: string; // 持久设备身份公钥（防伪造信任）
   publicKey?: string;
   isAuthenticated?: boolean;
   authChallenge?: string;
@@ -341,6 +342,8 @@ export class Room {
         case 'offer':
         case 'answer':
         case 'ice-candidate':
+        case 'identity-challenge':
+        case 'identity-response':
           await this.handleSignaling(ws, msg);
           break;
         case 'relay-data':
@@ -559,7 +562,7 @@ export class Room {
    * Handle peer joining the room
    */
   private async handleJoin(ws: WebSocket, msg: SignalingMessage): Promise<void> {
-    const joinData = msg.data as { name: string; deviceType: 'desktop' | 'mobile' | 'tablet'; browserInfo?: string };
+    const joinData = msg.data as { name: string; deviceType: 'desktop' | 'mobile' | 'tablet'; browserInfo?: string; deviceKey?: string };
     const peerId = crypto.randomUUID();
 
     // Sanitize name
@@ -575,6 +578,7 @@ export class Room {
       name: sanitizedName,
       deviceType: joinData.deviceType || 'desktop',
       browserInfo: this.sanitizeString(joinData.browserInfo || '', 100), // Limit browser info length
+      deviceKey: this.sanitizeString(joinData.deviceKey || '', 500), // 设备身份公钥（SPKI base64）
       isAuthenticated: true, // If they reached here, they are authenticated (or no password required)
     };
 
@@ -593,7 +597,7 @@ export class Room {
 
     const otherPeers = Array.from(activePeers.entries())
       .filter(([id]) => id !== peerId)
-      .map(([id, { attachment: p }]) => ({ id, name: p.name, deviceType: p.deviceType, browserInfo: p.browserInfo }));
+      .map(([id, { attachment: p }]) => ({ id, name: p.name, deviceType: p.deviceType, browserInfo: p.browserInfo, deviceKey: p.deviceKey }));
 
     // Send peer their ID, room code, and list of other peers
     ws.send(JSON.stringify({
@@ -606,7 +610,7 @@ export class Room {
     // Notify other peers about new peer
     this.broadcast({
       type: 'peer-joined',
-      data: { id: peerId, name: attachment.name, deviceType: attachment.deviceType, browserInfo: attachment.browserInfo },
+      data: { id: peerId, name: attachment.name, deviceType: attachment.deviceType, browserInfo: attachment.browserInfo, deviceKey: attachment.deviceKey },
     }, peerId);
   }
 

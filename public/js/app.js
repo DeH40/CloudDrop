@@ -37,6 +37,10 @@ class CloudDrop {
     // Trusted devices - auto-accept files from these devices
     this.trustedDevices = this.loadTrustedDevices();
 
+    // 设备身份验证（防伪造信任）
+    this.identityChallenges = new Map(); // nonce -> { resolve, timeout, peerId }
+    this.verifiedPeers = new Set(); // 本会话已通过身份验证的 peerId
+
     // App settings
     this.settings = this.loadSettings();
 
@@ -212,12 +216,27 @@ class CloudDrop {
   }
 
   /**
-   * Generate a fingerprint for a device (for trust identification)
-   * Uses name + deviceType + browserInfo to create a stable identifier
+   * 生成设备指纹（用于信任识别）
+   * 优先用持久设备公钥（防伪造）；旧客户端无密钥时回退旧指纹
    */
   getDeviceFingerprint(peer) {
-    const str = `${peer.name}|${peer.deviceType}|${peer.browserInfo || ''}`;
-    // Simple hash for fingerprint
+    if (peer.deviceKey && cryptoManager.isIdentityPersistent()) {
+      return this.hashFingerprint(`key:${peer.deviceKey}`);
+    }
+    return this.getLegacyDeviceFingerprint(peer);
+  }
+
+  /**
+   * 旧版指纹：名字+设备类型+浏览器信息（可伪造，仅用于向后兼容）
+   */
+  getLegacyDeviceFingerprint(peer) {
+    return this.hashFingerprint(`${peer.name}|${peer.deviceType}|${peer.browserInfo || ''}`);
+  }
+
+  /**
+   * 简单字符串哈希（指纹用，非安全用途）
+   */
+  hashFingerprint(str) {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
       const char = str.charCodeAt(i);
@@ -229,10 +248,13 @@ class CloudDrop {
 
   /**
    * Check if a device is trusted
+   * 密钥指纹不匹配时回退旧指纹（兼容升级前已信任的设备）
    */
   isDeviceTrusted(peer) {
     const fingerprint = this.getDeviceFingerprint(peer);
-    return this.trustedDevices.has(fingerprint);
+    if (this.trustedDevices.has(fingerprint)) return true;
+    const legacyFingerprint = this.getLegacyDeviceFingerprint(peer);
+    return legacyFingerprint !== fingerprint && this.trustedDevices.has(legacyFingerprint);
   }
 
   /**
@@ -259,6 +281,94 @@ class CloudDrop {
     this.trustedDevices.delete(fingerprint);
     this.saveTrustedDevices();
     this.updateTrustedBadge(peer.id, false);
+  }
+
+  /**
+   * 验证对方确实持有其声明的设备私钥（挑战-签名）
+   * @param {object} peer - 设备信息（需包含 deviceKey）
+   * @returns {Promise<boolean>}
+   */
+  async verifyPeerIdentity(peer) {
+    if (!peer.deviceKey) return true; // 旧客户端无密钥：按旧信任逻辑处理
+    if (this.verifiedPeers.has(peer.id)) return true;
+
+    const nonce = crypto.randomUUID();
+
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        this.identityChallenges.delete(nonce);
+        console.warn(`[App] 身份验证超时: ${peer.name}`);
+        resolve(false);
+      }, 3000);
+
+      this.identityChallenges.set(nonce, { resolve, timeout, peerId: peer.id });
+
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({
+          type: 'identity-challenge',
+          to: peer.id,
+          data: { nonce }
+        }));
+      } else {
+        clearTimeout(timeout);
+        this.identityChallenges.delete(nonce);
+        resolve(false);
+      }
+    });
+  }
+
+  /**
+   * 收到身份挑战：用设备私钥对 (nonce + 挑战方公钥) 签名并回包
+   */
+  async handleIdentityChallenge(fromPeerId, data) {
+    const { nonce } = data || {};
+    if (!nonce) return;
+
+    const peer = this.peers.get(fromPeerId);
+    const payload = `${nonce}:${peer?.deviceKey || ''}`;
+
+    try {
+      const signature = await cryptoManager.signIdentityChallenge(payload);
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({
+          type: 'identity-response',
+          to: fromPeerId,
+          data: { nonce, signature }
+        }));
+      }
+    } catch (e) {
+      console.warn('[App] 身份签名失败:', e);
+    }
+  }
+
+  /**
+   * 收到身份响应：验证签名，完成信任检查
+   */
+  async handleIdentityResponse(fromPeerId, data) {
+    const { nonce, signature } = data || {};
+    const pending = this.identityChallenges.get(nonce);
+    if (!pending) return;
+    if (pending.peerId !== fromPeerId) return; // 响应必须来自被挑战方
+
+    clearTimeout(pending.timeout);
+    this.identityChallenges.delete(nonce);
+
+    const peer = this.peers.get(fromPeerId);
+    if (!peer?.deviceKey) {
+      pending.resolve(false);
+      return;
+    }
+
+    try {
+      const myDeviceKey = await cryptoManager.getDevicePublicKey();
+      const payload = `${nonce}:${myDeviceKey}`;
+      const valid = await cryptoManager.verifyIdentityChallenge(peer.deviceKey, payload, signature);
+      if (valid) this.verifiedPeers.add(fromPeerId);
+      pending.resolve(valid);
+    } catch (e) {
+      console.warn('[App] 身份签名验证失败:', e);
+      pending.resolve(false);
+    }
   }
 
   /**
@@ -1081,14 +1191,27 @@ class CloudDrop {
   }
 
   sendJoinMessage() {
-    this.ws.send(JSON.stringify({
-      type: 'join',
-      data: {
-        name: this.deviceName,
-        deviceType: this.deviceType,
-        browserInfo: this.browserInfo
-      }
-    }));
+    // 携带持久设备身份公钥，供对方做防伪造信任验证
+    cryptoManager.getDevicePublicKey().then(deviceKey => {
+      this.ws.send(JSON.stringify({
+        type: 'join',
+        data: {
+          name: this.deviceName,
+          deviceType: this.deviceType,
+          browserInfo: this.browserInfo,
+          deviceKey
+        }
+      }));
+    }).catch(() => {
+      this.ws.send(JSON.stringify({
+        type: 'join',
+        data: {
+          name: this.deviceName,
+          deviceType: this.deviceType,
+          browserInfo: this.browserInfo
+        }
+      }));
+    });
   }
 
   handleSignaling(msg) {
@@ -1153,6 +1276,12 @@ class CloudDrop {
       case 'name-changed':
         this.handleNameChanged(msg.from, msg.data.name);
         break;
+      case 'identity-challenge':
+        this.handleIdentityChallenge(msg.from, msg.data);
+        break;
+      case 'identity-response':
+        this.handleIdentityResponse(msg.from, msg.data);
+        break;
       case 'file-request':
         this.handleFileRequest(msg.from, msg.data);
         break;
@@ -1168,19 +1297,26 @@ class CloudDrop {
   /**
    * Handle incoming file request - show confirmation dialog or auto-accept if trusted
    */
-  handleFileRequest(peerId, data) {
+  async handleFileRequest(peerId, data) {
     const peer = this.peers.get(peerId);
     const isRelayMode = data.transferMode === 'relay';
 
-    // Store pending request info
-    this.pendingFileRequest = { peerId, fileId: data.fileId, data };
+    // Store pending request info（并发请求时用局部引用避免串号）
+    const request = { peerId, fileId: data.fileId, data };
+    this.pendingFileRequest = request;
 
     // Check if this device is trusted - auto-accept if so
     if (peer && this.isDeviceTrusted(peer)) {
-      console.log(`[App] Auto-accepting file from trusted device: ${peer.name}`);
-      ui.showToast(i18n.t('toast.autoAccepting', { name: peer.name, file: data.name }), 'info');
-      this.acceptFileRequest();
-      return;
+      // 密钥指纹信任：先验证对方确实持有设备私钥，防公钥抄袭伪造
+      const verified = await this.verifyPeerIdentity(peer);
+      if (verified) {
+        console.log(`[App] Auto-accepting file from trusted device: ${peer.name}`);
+        ui.showToast(i18n.t('toast.autoAccepting', { name: peer.name, file: data.name }), 'info');
+        this.acceptFileRequest(request);
+        return;
+      }
+      // 验证失败/超时：降级为人工确认（安全兑底）
+      console.warn(`[App] Trusted device identity verification failed for ${peer.name}, falling back to manual confirm`);
     }
 
     // Update the receive modal with detailed info
@@ -1211,11 +1347,12 @@ class CloudDrop {
 
   /**
    * Accept the pending file request
+   * @param {object} request - 可选，指定要接受的请求（并发安全）
    */
-  acceptFileRequest() {
-    if (!this.pendingFileRequest) return;
+  acceptFileRequest(request = this.pendingFileRequest) {
+    if (!request) return;
 
-    const { peerId, fileId, data } = this.pendingFileRequest;
+    const { peerId, fileId, data } = request;
 
     // Send acceptance
     this.webrtc.respondToFileRequest(peerId, fileId, true);

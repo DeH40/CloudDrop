@@ -3,12 +3,60 @@
  * Implements ECDH key exchange + AES-256-GCM encryption
  */
 
+// =============================================================================
+// 设备身份 IndexedDB 存储（CryptoKey 可结构化克隆且保持不可导出）
+// =============================================================================
+const IDENTITY_DB_NAME = 'clouddrop-identity';
+const IDENTITY_DB_VERSION = 1;
+let identityDbPromise = null;
+
+function openIdentityDb() {
+  if (identityDbPromise) return identityDbPromise;
+  identityDbPromise = new Promise((resolve, reject) => {
+    try {
+      const req = indexedDB.open(IDENTITY_DB_NAME, IDENTITY_DB_VERSION);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains('keys')) {
+          req.result.createObjectStore('keys');
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error || new Error('identity db open failed'));
+    } catch (e) {
+      reject(e);
+    }
+  });
+  return identityDbPromise;
+}
+
+async function idbGet(key) {
+  const db = await openIdentityDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('keys', 'readonly');
+    const req = tx.objectStore('keys').get(key);
+    req.onsuccess = () => resolve(req.result ?? null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbPut(key, value) {
+  const db = await openIdentityDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('keys', 'readwrite');
+    tx.objectStore('keys').put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 export class CryptoManager {
   constructor() {
     this.keyPair = null;
     this.sharedSecrets = new Map(); // peerId -> CryptoKey
     this.roomKey = null; // Room-level encryption key (derived from password)
     this.roomPasswordSet = false; // Flag to track if room password is set
+    this.identityKeyPair = null; // 持久设备身份密钥（ECDSA，防伪造信任）
+    this.identityPersistent = false; // 身份密钥是否成功持久化到 IndexedDB
   }
 
   /**
@@ -248,6 +296,93 @@ export class CryptoManager {
    */
   hasSharedSecret(peerId) {
     return this.sharedSecrets.has(peerId);
+  }
+
+  // ============================================
+  // 持久设备身份（防伪造信任）
+  // ============================================
+
+  /**
+   * 获取或创建设备身份密钥对（ECDSA P-256，不可导出，持久化在 IndexedDB）
+   */
+  async getOrCreateIdentityKeyPair() {
+    if (this.identityKeyPair) return this.identityKeyPair;
+
+    // 尝试从 IndexedDB 恢复持久身份
+    try {
+      const stored = await idbGet('device-identity');
+      if (stored) {
+        this.identityKeyPair = stored;
+        this.identityPersistent = true;
+        return this.identityKeyPair;
+      }
+    } catch (e) {
+      // IndexedDB 不可用：使用会话级身份
+    }
+
+    this.identityKeyPair = await crypto.subtle.generateKey(
+      { name: 'ECDSA', namedCurve: 'P-256' },
+      false, // 不可导出
+      ['sign', 'verify']
+    );
+
+    try {
+      await idbPut('device-identity', this.identityKeyPair);
+      this.identityPersistent = true;
+    } catch (e) {
+      // 持久化失败：身份随会话变化，信任回退到旧指纹
+      console.warn('[Crypto] 设备身份无法持久化，信任验证回退到旧逻辑');
+    }
+
+    return this.identityKeyPair;
+  }
+
+  /**
+   * 设备公钥（SPKI base64），随 join 消息广播给房间内其他设备
+   */
+  async getDevicePublicKey() {
+    const keyPair = await this.getOrCreateIdentityKeyPair();
+    const exported = await crypto.subtle.exportKey('spki', keyPair.publicKey);
+    return this.arrayBufferToBase64(exported);
+  }
+
+  /**
+   * 对挑战 payload 签名（证明持有设备私钥）
+   */
+  async signIdentityChallenge(payload) {
+    const keyPair = await this.getOrCreateIdentityKeyPair();
+    const signature = await crypto.subtle.sign(
+      { name: 'ECDSA', hash: 'SHA-256' },
+      keyPair.privateKey,
+      new TextEncoder().encode(payload)
+    );
+    return this.arrayBufferToBase64(signature);
+  }
+
+  /**
+   * 用对方设备公钥验证签名
+   */
+  async verifyIdentityChallenge(publicKeyBase64, payload, signatureBase64) {
+    const publicKey = await crypto.subtle.importKey(
+      'spki',
+      this.base64ToArrayBuffer(publicKeyBase64),
+      { name: 'ECDSA', namedCurve: 'P-256' },
+      false,
+      ['verify']
+    );
+    return crypto.subtle.verify(
+      { name: 'ECDSA', hash: 'SHA-256' },
+      publicKey,
+      new TextEncoder().encode(payload),
+      this.base64ToArrayBuffer(signatureBase64)
+    );
+  }
+
+  /**
+   * 身份密钥是否已持久化（决定信任指纹策略）
+   */
+  isIdentityPersistent() {
+    return this.identityPersistent;
   }
 
   // ============================================
