@@ -34,6 +34,10 @@ const {
   MAX_ATTEMPTS: P2P_RETRY_MAX_ATTEMPTS,
 } = P2P_RETRY;
 
+// Keep text/image messages well under the 256KB server relay limit
+// (encrypted payload is base64-encoded again before hitting the wire)
+const MAX_TEXT_PAYLOAD = 200 * 1024;
+
 // =============================================================================
 // Safe Base64 encoding/decoding for large binary data (mobile compatible)
 // =============================================================================
@@ -1830,7 +1834,15 @@ export class WebRTCManager {
 
     console.log(`[WebRTC] Sending text to ${peerId} via P2P`);
     const encrypted = await cryptoManager.encryptText(peerId, text);
-    dc.send(JSON.stringify({ type: 'text', content: encrypted, isEncrypted: true }));
+    const payload = JSON.stringify({ type: 'text', content: encrypted, isEncrypted: true });
+
+    // Pre-check: oversized messages fail loudly instead of silently breaking
+    // the data channel (or being dropped by the relay server)
+    if (payload.length > MAX_TEXT_PAYLOAD) {
+      throw new Error('MESSAGE_TOO_LARGE');
+    }
+
+    dc.send(payload);
   }
 
   async _sendTextViaRelay(peerId, text) {
@@ -1841,10 +1853,18 @@ export class WebRTCManager {
     }
 
     const encrypted = await cryptoManager.encryptText(peerId, text);
+    const relayPayload = { type: 'text', content: encrypted, isEncrypted: true };
+
+    // Pre-check against the server 256KB limit - fail loudly instead of
+    // letting the server drop the message silently
+    if (JSON.stringify(relayPayload).length > MAX_TEXT_PAYLOAD) {
+      throw new Error('MESSAGE_TOO_LARGE');
+    }
+
     this.signaling.send({
       type: 'relay-data',
       to: peerId,
-      data: { type: 'text', content: encrypted, isEncrypted: true }
+      data: relayPayload
     });
   }
 

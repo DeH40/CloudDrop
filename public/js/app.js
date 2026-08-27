@@ -1473,7 +1473,11 @@ class CloudDrop {
       this.saveMessage(peerId, { type: 'sent', text, timestamp: Date.now() });
       return true;
     } catch (e) {
-      ui.showToast(i18n.t('toast.sendFailed', { error: e.message }), 'error');
+      if (e.message === 'MESSAGE_TOO_LARGE') {
+        ui.showToast(i18n.t('errors.messageTooLarge'), 'error');
+      } else {
+        ui.showToast(i18n.t('toast.sendFailed', { error: e.message }), 'error');
+      }
       return false;
     }
   }
@@ -1485,6 +1489,12 @@ class CloudDrop {
    */
   async sendImageMessage(peerId, imageDataUrl) {
     if (!imageDataUrl) return false;
+
+    // 预算预检：超限直接失败并提示，不静默丢失
+    if (imageDataUrl.length > 170000) {
+      ui.showToast(i18n.t('errors.messageTooLarge'), 'error');
+      return false;
+    }
 
     try {
       // Create message payload
@@ -1502,16 +1512,22 @@ class CloudDrop {
       });
       return true;
     } catch (e) {
-      ui.showToast(i18n.t('chat.imageSendFailed', { error: e.message }), 'error');
+      if (e.message === 'MESSAGE_TOO_LARGE') {
+        ui.showToast(i18n.t('errors.messageTooLarge'), 'error');
+      } else {
+        ui.showToast(i18n.t('chat.imageSendFailed', { error: e.message }), 'error');
+      }
       return false;
     }
   }
 
   /**
    * Compress and resize image for sending
+   * Uses a quality/width ladder to fit the image within the relay message
+   * budget (256KB server limit), so sending never fails silently.
    * @param {File} file - Image file
    * @param {number} maxWidth - Maximum width (default 1200)
-   * @param {number} quality - JPEG quality 0-1 (default 0.8)
+   * @param {number} quality - Initial JPEG quality 0-1 (default 0.8)
    * @returns {Promise<string>} - Base64 data URL
    */
   async compressImage(file, maxWidth = 1200, quality = 0.8) {
@@ -1520,25 +1536,41 @@ class CloudDrop {
       reader.onload = (e) => {
         const img = new Image();
         img.onload = () => {
-          // Calculate new dimensions
-          let width = img.width;
-          let height = img.height;
+          try {
+            // 预算阶梯：优先保质量，超预算则逐步降质量、降尺寸
+            // dataURL 150KB → 加密+base64 后约 200KB，低于服务端 256KB 上限
+            const IMAGE_BUDGET = 150000;
+            const qualityLadder = [0.8, 0.6, 0.45, 0.3];
+            const widthLadder = [1200, 1000, 800];
 
-          if (width > maxWidth) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
+            let result = null;
+
+            for (const width of widthLadder) {
+              for (const q of qualityLadder) {
+                const scale = Math.min(1, width / img.width);
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.max(1, Math.round(img.width * scale));
+                canvas.height = Math.max(1, Math.round(img.height * scale));
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                const dataUrl = canvas.toDataURL('image/jpeg', q);
+                if (dataUrl.length <= IMAGE_BUDGET) {
+                  result = dataUrl;
+                  break;
+                }
+                // Keep the smallest candidate in case no step fits the budget
+                if (!result || dataUrl.length < result.length) {
+                  result = dataUrl;
+                }
+              }
+              if (result && result.length <= IMAGE_BUDGET) break;
+            }
+
+            resolve(result);
+          } catch (err) {
+            reject(new Error(i18n.t('errors.imageLoadFailed')));
           }
-
-          // Create canvas and draw resized image
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-
-          // Convert to data URL
-          const dataUrl = canvas.toDataURL('image/jpeg', quality);
-          resolve(dataUrl);
         };
         img.onerror = () => reject(new Error(i18n.t('errors.imageLoadFailed')));
         img.src = e.target.result;
