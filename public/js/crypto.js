@@ -203,15 +203,12 @@ export class CryptoManager {
       ? undefined
       : (typeof additionalData === 'string' ? new TextEncoder().encode(additionalData) : additionalData);
 
-    const encrypted = await crypto.subtle.encrypt(
-      {
-        name: 'AES-GCM',
-        iv: iv,
-        additionalData: aad
-      },
-      sharedKey,
-      data
-    );
+    // Safari 兼容：additionalData 为 undefined 时不能出现在参数对象里，
+    // 否则抛 "AeadParams: additionalData: Not a BufferSource"
+    const params = { name: 'AES-GCM', iv: iv };
+    if (aad !== undefined) params.additionalData = aad;
+
+    const encrypted = await crypto.subtle.encrypt(params, sharedKey, data);
 
     return { encrypted, iv };
   }
@@ -234,15 +231,11 @@ export class CryptoManager {
       ? undefined
       : (typeof additionalData === 'string' ? new TextEncoder().encode(additionalData) : additionalData);
 
-    const decrypted = await crypto.subtle.decrypt(
-      {
-        name: 'AES-GCM',
-        iv: iv,
-        additionalData: aad
-      },
-      sharedKey,
-      encryptedData
-    );
+    // Safari 兼容：undefined 时不传 additionalData
+    const params = { name: 'AES-GCM', iv: iv };
+    if (aad !== undefined) params.additionalData = aad;
+
+    const decrypted = await crypto.subtle.decrypt(params, sharedKey, encryptedData);
 
     return decrypted;
   }
@@ -577,15 +570,11 @@ export class CryptoManager {
       ? undefined
       : (typeof aad === 'string' ? new TextEncoder().encode(aad) : aad);
 
-    const encrypted = await crypto.subtle.encrypt(
-      {
-        name: 'AES-GCM',
-        iv: iv,
-        additionalData: aadBytes
-      },
-      this.roomKey,
-      data
-    );
+    // Safari 兼容：undefined 时不传 additionalData
+    const params = { name: 'AES-GCM', iv: iv };
+    if (aadBytes !== undefined) params.additionalData = aadBytes;
+
+    const encrypted = await crypto.subtle.encrypt(params, this.roomKey, data);
 
     return { encrypted, iv };
   }
@@ -610,15 +599,11 @@ export class CryptoManager {
       ? undefined
       : (typeof aad === 'string' ? new TextEncoder().encode(aad) : aad);
 
-    const decrypted = await crypto.subtle.decrypt(
-      {
-        name: 'AES-GCM',
-        iv: iv,
-        additionalData: aadBytes
-      },
-      this.roomKey,
-      encryptedData
-    );
+    // Safari 兼容：undefined 时不传 additionalData
+    const params = { name: 'AES-GCM', iv: iv };
+    if (aadBytes !== undefined) params.additionalData = aadBytes;
+
+    const decrypted = await crypto.subtle.decrypt(params, this.roomKey, encryptedData);
 
     return decrypted;
   }
