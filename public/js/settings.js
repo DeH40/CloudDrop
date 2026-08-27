@@ -5,6 +5,7 @@ import { i18n } from './i18n.js';
 import * as ui from './ui.js';
 import { debugLog } from './logger.js';
 import { STORAGE_KEYS, DEFAULT_SETTINGS } from './config.js';
+import { cryptoManager } from './crypto.js';
 
 export const SettingsMixin = {
   loadSettings() {
@@ -112,14 +113,12 @@ export const SettingsMixin = {
   },
 
   getDeviceFingerprint(peer) {
+    // 仅认可持久设备公钥指纹：无 deviceKey / 身份未持久化时返回 null，
+    // 不提供可伪造的名称指纹回退（旧信任记录需人工重新信任一次）
     if (peer.deviceKey && cryptoManager.isIdentityPersistent()) {
       return this.hashFingerprint(`key:${peer.deviceKey}`);
     }
-    return this.getLegacyDeviceFingerprint(peer);
-  },
-
-  getLegacyDeviceFingerprint(peer) {
-    return this.hashFingerprint(`${peer.name}|${peer.deviceType}|${peer.browserInfo || ''}`);
+    return null;
   },
 
   hashFingerprint(str) {
@@ -133,14 +132,18 @@ export const SettingsMixin = {
   },
 
   isDeviceTrusted(peer) {
+    // 仅认可密钥指纹：旧客户端（无 deviceKey）不自动接收，需人工确认
     const fingerprint = this.getDeviceFingerprint(peer);
-    if (this.trustedDevices.has(fingerprint)) return true;
-    const legacyFingerprint = this.getLegacyDeviceFingerprint(peer);
-    return legacyFingerprint !== fingerprint && this.trustedDevices.has(legacyFingerprint);
+    return !!fingerprint && this.trustedDevices.has(fingerprint);
   },
 
   trustDevice(peer) {
     const fingerprint = this.getDeviceFingerprint(peer);
+    if (!fingerprint) {
+      // 无法证明设备身份（旧客户端/身份未持久化）：不建立信任
+      ui.showToast(i18n.t('settings.trustRequiresDeviceKey') || '对方设备不支持身份验证，无法信任', 'warning');
+      return;
+    }
     this.trustedDevices.set(fingerprint, {
       name: peer.name,
       deviceType: peer.deviceType,
@@ -420,7 +423,7 @@ export const SettingsMixin = {
         this.updateSetting('relayFallbackTimeout', value);
       });
     });
-  },,
+  },
 
   syncSettingsToUI(target) {
     // 中继降级开关

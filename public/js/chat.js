@@ -4,6 +4,7 @@
 import { i18n } from './i18n.js';
 import * as ui from './ui.js';
 import { debugLog } from './logger.js';
+import { ERROR_CODES } from './config.js';
 
 export const ChatMixin = {
   saveMessage(peerId, message) {
@@ -175,9 +176,12 @@ export const ChatMixin = {
     const messages = this.getMessageHistory(peerId);
     const container = document.getElementById('chatMessages');
     const renderedCount = this.renderedChatCounts.get(peerId) || 0;
+    // 会话切换检测：两个会话消息数相同时，旧逻辑不会清空共享容器
+    const peerChanged = this.renderedChatPeer !== peerId;
 
-    // 空历史：只渲染一次空状态
+    // 空历史：清空容器后渲染一次空状态
     if (messages.length === 0) {
+      if (container.children.length !== 0) container.innerHTML = '';
       if (container.children.length === 0) {
         const emptyEl = document.createElement('div');
         emptyEl.className = 'chat-empty-state';
@@ -189,11 +193,12 @@ export const ChatMixin = {
         container.appendChild(emptyEl);
       }
       this.renderedChatCounts.set(peerId, 0);
+      this.renderedChatPeer = peerId;
       return;
     }
 
-    // 需要全量重建：强制标记、历史缩短（重试后）或容器与计数不一致（切换会话）
-    if (forceRebuild || renderedCount > messages.length || container.children.length !== renderedCount) {
+    // 需要全量重建：强制标记、会话切换、历史缩短或容器与计数不一致
+    if (forceRebuild || peerChanged || renderedCount > messages.length || container.children.length !== renderedCount) {
       container.innerHTML = '';
       this.renderedChatCounts.set(peerId, 0);
     }
@@ -204,6 +209,7 @@ export const ChatMixin = {
       container.appendChild(this.buildChatMessageElement(peerId, messages[i], i));
     }
     this.renderedChatCounts.set(peerId, messages.length);
+    this.renderedChatPeer = peerId;
 
     // Use requestAnimationFrame to ensure DOM is fully updated before scrolling
     // This handles async image loading and prevents race conditions
