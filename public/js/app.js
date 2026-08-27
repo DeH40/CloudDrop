@@ -779,14 +779,25 @@ class CloudDrop {
     this.ws.onmessage = async (e) => {
       const message = JSON.parse(e.data);
 
-      // Handle password error messages
+      // Handle server error frames
       if (message.type === 'error') {
-        if (message.error === 'PASSWORD_REQUIRED' || message.error === 'PASSWORD_INCORRECT') {
-          ui.showToast(i18n.t('room.passwordError'), 'error');
-          this.clearRoomPassword();
-          // WebSocket will be closed by server, onclose handler will show join modal
-          return;
+        switch (message.error) {
+          case 'PASSWORD_REQUIRED':
+          case 'PASSWORD_INCORRECT':
+            ui.showToast(i18n.t('room.passwordError'), 'error');
+            this.clearRoomPassword();
+            // WebSocket will be closed by server, onclose handler will show join modal
+            break;
+          case 'MESSAGE_TOO_LARGE':
+            ui.showToast(i18n.t('errors.messageTooLarge'), 'error');
+            break;
+          case 'RATE_LIMIT_EXCEEDED':
+            ui.showToast(i18n.t('errors.rateLimited'), 'warning');
+            break;
+          default:
+            ui.showToast(i18n.t('errors.serverError', { error: message.error || 'UNKNOWN' }), 'error');
         }
+        return;
       }
 
       // Handle challenge for secure rooms

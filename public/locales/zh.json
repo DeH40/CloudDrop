@@ -319,7 +319,10 @@
     "unsupportedBrowser": "浏览器不支持",
     "networkError": "网络错误",
     "fileReadFailed": "文件读取失败",
-    "imageLoadFailed": "图片加载失败"
+    "imageLoadFailed": "图片加载失败",
+    "messageTooLarge": "消息超过大小限制(256KB)，发送失败",
+    "rateLimited": "发送过快，已被限流，请稍后重试",
+    "serverError": "服务器错误：{{error}}"
   },
   "notification": {
     "fileReceived": "收到新文件",

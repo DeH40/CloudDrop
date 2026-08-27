@@ -320,7 +320,10 @@
     "unsupportedBrowser": "Browser not supported",
     "networkError": "Network error",
     "fileReadFailed": "File read failed",
-    "imageLoadFailed": "Image load failed"
+    "imageLoadFailed": "Image load failed",
+    "messageTooLarge": "Message exceeds size limit (256KB), send failed",
+    "rateLimited": "Sending too fast, rate limited. Try again later",
+    "serverError": "Server error: {{error}}"
   },
   "notification": {
     "fileReceived": "New file received",
