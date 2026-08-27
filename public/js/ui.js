@@ -21,7 +21,7 @@ export function generateQRCode(canvas, text, options = {}) {
     lightColor = '#ffffff'
   } = options;
   
-  // Use qrcode-generator library (loaded via CDN)
+  // Use qrcode-generator library (self-hosted at /vendor/qrcode.min.js)
   // Type 0 = auto-detect version, 'M' = medium error correction
   const qr = qrcode(0, 'M');
   qr.addData(text);
