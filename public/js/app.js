@@ -483,7 +483,6 @@ class CloudDrop {
     this.updateDeviceNameDisplay();
     this.setupKeyboardDetection();
     this.setupVisualViewport();
-    this.setupLanguageSwitcher();
 
     // Check notification permission on startup
     await this.checkNotificationPermission();
