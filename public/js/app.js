@@ -1157,6 +1157,11 @@ class CloudDrop {
       this.currentTransfer = null;
     };
 
+    // Peer ECDH key ready -> compute and show SAS safety code on the peer card
+    this.webrtc.onPeerKeyReady = (peerId) => {
+      this.updatePeerSafetyCode(peerId);
+    };
+
     // Connection state change handler
     this.webrtc.onConnectionStateChange = ({ peerId, status, message }) => {
       const toastId = `connection-${peerId}`;
@@ -1452,9 +1457,24 @@ class CloudDrop {
       setTimeout(() => this.updateTrustedBadge(peer.id, true), 50);
     }
 
+    // 计算并展示短安全码（密钥未就绪时为 null，就绪后由 onPeerKeyReady 更新）
+    this.updatePeerSafetyCode(peer.id);
+
     // Prewarm WebRTC connection for faster first transfer
     if (this.webrtc) {
       this.webrtc.prewarmConnection(peer.id);
+    }
+  }
+
+  /**
+   * 更新设备卡片上的短安全码（SAS）
+   */
+  async updatePeerSafetyCode(peerId) {
+    try {
+      const code = await cryptoManager.computeSafetyCode(peerId);
+      if (code) ui.updatePeerSafetyCode(peerId, code);
+    } catch (e) {
+      console.warn('[App] 安全码计算失败:', e);
     }
   }
 

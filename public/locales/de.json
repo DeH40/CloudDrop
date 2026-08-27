@@ -131,7 +131,8 @@
       "one": "{{count}} Gerät",
       "other": "{{count}} Geräte"
     },
-    "transferIncomplete": "Übertragung fehlgeschlagen: Datei unvollständig, bitte erneut versuchen"
+    "transferIncomplete": "Übertragung fehlgeschlagen: Datei unvollständig, bitte erneut versuchen",
+    "safetyCodeTitle": "Sicherheitscode: Zeigen beide Geräte denselben Code, wurde die Verbindung nicht manipuliert"
   },
   "fileRequest": {
     "title": "Datei empfangen",

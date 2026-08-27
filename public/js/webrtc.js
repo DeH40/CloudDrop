@@ -331,6 +331,7 @@ export class WebRTCManager {
     this.activeTransfers = new Map(); // fileId -> { peerId, direction: 'send'|'receive', cancelled: boolean }
     this.onTransferCancelled = null; // Callback when transfer is cancelled by peer
     this.onTransferFailed = null; // Callback when a transfer fails (e.g. incomplete data)
+    this.onPeerKeyReady = null; // Callback when peer ECDH key becomes available (SAS 安全码)
 
     // Pre-fetch ICE servers eagerly
     fetchIceServers();
@@ -982,6 +983,7 @@ export class WebRTCManager {
       if (data.publicKey) {
         await cryptoManager.importPeerPublicKey(peerId, data.publicKey);
         this._resolveKeyWaiters(peerId);
+        if (this.onPeerKeyReady) this.onPeerKeyReady(peerId);
       }
 
       const publicKey = await cryptoManager.exportPublicKey();
@@ -1026,6 +1028,7 @@ export class WebRTCManager {
       if (data.publicKey) {
         await cryptoManager.importPeerPublicKey(peerId, data.publicKey);
         this._resolveKeyWaiters(peerId);
+        if (this.onPeerKeyReady) this.onPeerKeyReady(peerId);
         console.log(`[WebRTC] Imported public key from ${peerId}`);
       }
     } catch (e) {
@@ -1995,6 +1998,7 @@ export class WebRTCManager {
     if (data.publicKey) {
       await cryptoManager.importPeerPublicKey(peerId, data.publicKey);
       this._resolveKeyWaiters(peerId);
+      if (this.onPeerKeyReady) this.onPeerKeyReady(peerId);
       console.log(`[WebRTC] Imported public key from ${peerId} via key-exchange`);
 
       // Send our public key back if they don't have it
@@ -2529,6 +2533,7 @@ export class WebRTCManager {
     this.onConnectionStateChange = null;
     this.onTransferCancelled = null;
     this.onTransferFailed = null;
+    this.onPeerKeyReady = null;
 
     console.log('[WebRTC] Manager destroyed');
   }

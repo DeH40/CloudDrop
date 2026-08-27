@@ -129,7 +129,8 @@
     "deviceCount": {
       "other": "{{count}} 個のデバイス"
     },
-    "transferIncomplete": "転送失敗：ファイルが不完全です。再試行してください"
+    "transferIncomplete": "転送失敗：ファイルが不完全です。再試行してください",
+    "safetyCodeTitle": "安全コード：両端末で同じコードが表示されれば接続は改ざんされていません"
   },
   "fileRequest": {
     "title": "ファイルを受信",

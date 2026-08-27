@@ -131,7 +131,8 @@
       "one": "{{count}} appareil",
       "other": "{{count}} appareils"
     },
-    "transferIncomplete": "Transfert échoué : fichier incomplet, veuillez réessayer"
+    "transferIncomplete": "Transfert échoué : fichier incomplet, veuillez réessayer",
+    "safetyCodeTitle": "Code de sécurité : si les deux appareils affichent le même code, la connexion n'est pas compromise"
   },
   "fileRequest": {
     "title": "Fichier reçu",

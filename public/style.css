@@ -547,6 +547,21 @@ body::after {
   max-width: 100%;
 }
 
+.peer-safety-code {
+  display: none;
+  font-size: 10px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  opacity: 0.85;
+  margin-top: 2px;
+  cursor: help;
+}
+
+.peer-safety-code.visible {
+  display: inline-block;
+}
+
 /* ============================================
    Connection Mode Badge (on peer card)
    ============================================ */

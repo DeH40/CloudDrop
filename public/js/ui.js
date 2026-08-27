@@ -367,11 +367,35 @@ export function createPeerCard(peer) {
     <span class="peer-name">${escapeHtml(peer.name)}</span>
     <span class="peer-device">${deviceLabel}</span>
     <span class="peer-browser">${escapeHtml(peer.browserInfo || '')}</span>
+    <span class="peer-safety-code" data-role="safety-code"></span>
     <button class="peer-action-btn" data-peer-id="${peer.id}" data-action="message" title="${i18n.t('chat.placeholder')}">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
     </button>
   `;
   return card;
+}
+
+/**
+ * 更新设备卡片的短安全码（SAS）
+ * @param {string} peerId - Peer ID
+ * @param {string|null} code - 8 位十六进制安全码，null 时隐藏
+ */
+export function updatePeerSafetyCode(peerId, code) {
+  const card = document.querySelector(`[data-peer-id="${peerId}"]`);
+  if (!card) return;
+
+  const el = card.querySelector('[data-role="safety-code"]');
+  if (!el) return;
+
+  if (!code) {
+    el.classList.remove('visible');
+    el.textContent = '';
+    return;
+  }
+
+  el.textContent = `🔒 ${code}`;
+  el.title = i18n.t('transfer.safetyCodeTitle');
+  el.classList.add('visible');
 }
 
 /**

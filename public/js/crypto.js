@@ -57,6 +57,7 @@ export class CryptoManager {
     this.roomPasswordSet = false; // Flag to track if room password is set
     this.identityKeyPair = null; // 持久设备身份密钥（ECDSA，防伪造信任）
     this.identityPersistent = false; // 身份密钥是否成功持久化到 IndexedDB
+    this.peerPublicKeys = new Map(); // peerId -> base64 SPKI（安全码计算）
   }
 
   /**
@@ -93,6 +94,8 @@ export class CryptoManager {
    */
   async importPeerPublicKey(peerId, publicKeyBase64) {
     const publicKeyBuffer = this.base64ToArrayBuffer(publicKeyBase64);
+
+    this.peerPublicKeys.set(peerId, publicKeyBase64);
     
     const peerPublicKey = await crypto.subtle.importKey(
       'spki',
@@ -122,6 +125,29 @@ export class CryptoManager {
 
     this.sharedSecrets.set(peerId, sharedSecret);
     return sharedSecret;
+  }
+
+  /**
+   * 获取对端 ECDH 公钥（原始 base64，用于安全码计算）
+   */
+  getPeerPublicKey(peerId) {
+    return this.peerPublicKeys.get(peerId) || null;
+  }
+
+  /**
+   * 计算双方一致的短安全码（SAS）
+   * = SHA-256(排序后的双方公钥) 前 8 位十六进制
+   * 双方独立计算得到相同结果；信令被中间人篡改时两码不一致
+   */
+  async computeSafetyCode(peerId) {
+    const peerKey = this.peerPublicKeys.get(peerId);
+    if (!peerKey) return null;
+
+    const myKey = await this.exportPublicKey();
+    const [a, b] = [myKey, peerKey].sort();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(a + b));
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.slice(0, 4).map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
   }
 
   /**
@@ -287,6 +313,7 @@ export class CryptoManager {
    */
   removePeer(peerId) {
     this.sharedSecrets.delete(peerId);
+    this.peerPublicKeys.delete(peerId);
   }
 
   /**

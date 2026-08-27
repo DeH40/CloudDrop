@@ -129,7 +129,8 @@
     "deviceCount": {
       "other": "{{count}} 個設備"
     },
-    "transferIncomplete": "傳輸失敗：檔案不完整，請重試"
+    "transferIncomplete": "傳輸失敗：檔案不完整，請重試",
+    "safetyCodeTitle": "安全碼：兩台裝置顯示一致即確認連線未被中間人篡改"
   },
   "fileRequest": {
     "title": "收到文件",

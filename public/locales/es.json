@@ -131,7 +131,8 @@
       "one": "{{count}} dispositivo",
       "other": "{{count}} dispositivos"
     },
-    "transferIncomplete": "Transferencia fallida: archivo incompleto, reintente"
+    "transferIncomplete": "Transferencia fallida: archivo incompleto, reintente",
+    "safetyCodeTitle": "Código de seguridad: si ambos dispositivos muestran el mismo código, la conexión no ha sido manipulada"
   },
   "fileRequest": {
     "title": "Archivo recibido",

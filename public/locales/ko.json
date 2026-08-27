@@ -129,7 +129,8 @@
     "deviceCount": {
       "other": "기기 {{count}}대"
     },
-    "transferIncomplete": "전송 실패: 파일이 불완전합니다. 다시 시도하세요"
+    "transferIncomplete": "전송 실패: 파일이 불완전합니다. 다시 시도하세요",
+    "safetyCodeTitle": "보안 코드: 양쪽 기기에 같은 코드가 표시되면 연결이 변조되지 않은 것입니다"
   },
   "fileRequest": {
     "title": "파일 수신",

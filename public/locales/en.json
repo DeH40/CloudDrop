@@ -122,6 +122,7 @@
     "cancelTransfer": "Cancel Transfer",
     "transferCancelled": "Transfer cancelled",
     "transferIncomplete": "Transfer failed: file incomplete, please retry",
+    "safetyCodeTitle": "Safety code: if both devices show the same code, the connection is not tampered with",
     "transferComplete": "Transfer complete",
     "releaseToDrop": "Release to send file",
     "fileCount": {
