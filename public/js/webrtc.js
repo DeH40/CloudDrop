@@ -1546,6 +1546,19 @@ export class WebRTCManager {
       } else if (msg.type === 'file-end') {
         const transfer = this.incomingTransfers.get(peerId);
         if (transfer) {
+          // Integrity check: never deliver an incomplete file
+          const expectedChunks = transfer.totalChunks || 0;
+          const chunkCount = transfer.chunks.length;
+          if (chunkCount !== expectedChunks || transfer.received !== transfer.size) {
+            console.error(`[WebRTC] P2P transfer incomplete: ${chunkCount}/${expectedChunks} chunks, ${transfer.received}/${transfer.size} bytes - discarding`);
+            if (this.onTransferFailed) {
+              this.onTransferFailed(peerId, transfer.fileId, transfer.name, 'incomplete');
+            }
+            this.incomingTransfers.delete(peerId);
+            this.activeTransfers.delete(transfer.fileId);
+            return;
+          }
+
           const blob = new Blob(transfer.chunks, { type: transfer.mimeType || 'application/octet-stream' }); // Use MIME type
           if (this.onFileReceived) this.onFileReceived(peerId, transfer.name, blob);
           this.incomingTransfers.delete(peerId);
