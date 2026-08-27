@@ -196,7 +196,9 @@ async function rankIceServers(iceServers) {
 
 /**
  * Fetch ICE servers configuration from the server with health check
- * Results are cached for 5 minutes
+ * Results are cached in memory for 5 minutes and in sessionStorage for
+ * 30 minutes (avoids the cold-start cost of probing 5 STUN servers with
+ * parallel RTCPeerConnections on every page load).
  * @param {boolean} forceRefresh - Force refresh cache
  */
 async function fetchIceServers(forceRefresh = false) {
@@ -205,6 +207,24 @@ async function fetchIceServers(forceRefresh = false) {
   // Return cached if valid
   if (!forceRefresh && cachedIceServers && (now - cachedIceServersTimestamp) < ICE_SERVERS_CACHE_TTL) {
     return cachedIceServers;
+  }
+
+  // Try sessionStorage cache (survives reloads within the same session)
+  if (!forceRefresh) {
+    try {
+      const stored = sessionStorage.getItem('clouddrop_ice_servers');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && Array.isArray(parsed.servers) && (now - parsed.timestamp) < ICE_SERVERS_CACHE_TTL * 6) {
+          cachedIceServers = parsed.servers;
+          cachedIceServersTimestamp = parsed.timestamp;
+          console.log(`[WebRTC] Reusing ICE servers from sessionStorage (${parsed.servers.length} servers)`);
+          return cachedIceServers;
+        }
+      }
+    } catch (e) {
+      // Corrupt sessionStorage entry - ignore and refetch
+    }
   }
 
   // Return pending promise if already fetching
@@ -228,6 +248,16 @@ async function fetchIceServers(forceRefresh = false) {
         // Update cache
         cachedIceServers = rankedServers;
         cachedIceServersTimestamp = Date.now();
+
+        // Persist to sessionStorage so the next page load skips the probing
+        try {
+          sessionStorage.setItem('clouddrop_ice_servers', JSON.stringify({
+            servers: rankedServers,
+            timestamp: cachedIceServersTimestamp
+          }));
+        } catch (e) {
+          // Storage full/unavailable - non-fatal
+        }
 
         return cachedIceServers;
       }
