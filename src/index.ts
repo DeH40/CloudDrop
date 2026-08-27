@@ -36,6 +36,30 @@ function isSetPasswordRateLimited(ip: string): boolean {
   return entry.count > SET_PASSWORD_MAX_PER_IP;
 }
 
+// =============================================================================
+// ICE servers (TURN credentials) caching + per-IP rate limiting
+// Each unique client previously triggered a fresh Cloudflare TURN API call -
+// expensive and abusable. Cache at module scope and throttle by IP.
+// =============================================================================
+let cachedIceServers: { iceServers: unknown[]; expiresAt: number } | null = null;
+
+const iceServersRequestLimits = new Map<string, { count: number; resetAt: number }>();
+const ICE_SERVERS_MAX_PER_IP = 10;         // 10 requests
+const ICE_SERVERS_WINDOW_MS = 60 * 1000;   // per minute, per IP
+
+function isIceServersRateLimited(ip: string): boolean {
+  const now = Date.now();
+  let entry = iceServersRequestLimits.get(ip);
+
+  if (!entry || now > entry.resetAt) {
+    iceServersRequestLimits.set(ip, { count: 1, resetAt: now + ICE_SERVERS_WINDOW_MS });
+    return false;
+  }
+
+  entry.count++;
+  return entry.count > ICE_SERVERS_MAX_PER_IP;
+}
+
 export default {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -56,7 +80,7 @@ export default {
 
     // Handle ICE servers request (for TURN credentials)
     if (url.pathname === '/api/ice-servers') {
-      return handleIceServers(env);
+      return handleIceServers(request, env);
     }
 
     // Static assets are handled automatically by Cloudflare
@@ -113,7 +137,7 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
 /**
  * Return ICE servers configuration with TURN credentials
  */
-async function handleIceServers(env: Env): Promise<Response> {
+async function handleIceServers(request: Request, env: Env): Promise<Response> {
   // Default STUN-only configuration (fallback if TURN not configured)
   // Prioritize China-accessible servers, with global fallbacks
   const defaultIceServers = [
@@ -126,9 +150,27 @@ async function handleIceServers(env: Env): Promise<Response> {
     { urls: 'stun:stun.nextcloud.com:3478' },   // Nextcloud
   ];
 
+  const jsonHeaders = { 'Content-Type': 'application/json' };
+
   // If TURN credentials are configured, fetch dynamic credentials
   if (env.TURN_KEY_ID && env.TURN_KEY_API_TOKEN) {
+    // Throttle by IP so TURN credentials can't be scraped for bandwidth abuse
+    const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
+    if (isIceServersRateLimited(clientIP)) {
+      return new Response(JSON.stringify({ error: 'Too many requests' }), {
+        status: 429,
+        headers: jsonHeaders,
+      });
+    }
+
     try {
+      // Serve from cache while at least 1h of TTL remains (TTL is 24h)
+      if (cachedIceServers && cachedIceServers.expiresAt - Date.now() > 60 * 60 * 1000) {
+        return new Response(JSON.stringify({ iceServers: cachedIceServers.iceServers }), {
+          headers: { ...jsonHeaders, 'Cache-Control': 'public, max-age=300' },
+        });
+      }
+
       const response = await fetch(
         `https://rtc.live.cloudflare.com/v1/turn/keys/${env.TURN_KEY_ID}/credentials/generate-ice-servers`,
         {
@@ -151,8 +193,12 @@ async function handleIceServers(env: Env): Promise<Response> {
           }
           return s;
         });
+
+        // Cache until 5 minutes before expiry
+        cachedIceServers = { iceServers: filteredServers, expiresAt: Date.now() + 23 * 60 * 60 * 1000 };
+
         return new Response(JSON.stringify({ iceServers: filteredServers }), {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { ...jsonHeaders, 'Cache-Control': 'public, max-age=300' },
         });
       }
     } catch (error) {
@@ -162,7 +208,7 @@ async function handleIceServers(env: Env): Promise<Response> {
 
   // Return default STUN-only config
   return new Response(JSON.stringify({ iceServers: defaultIceServers }), {
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders,
   });
 }
 
