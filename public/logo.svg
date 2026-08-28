@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 80" fill="none">
+  <title>CloudDrop Blue Portal</title>
+  <defs>
+    <linearGradient id="portal" x1="14" y1="14" x2="66" y2="66" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
+    </linearGradient>
+    <linearGradient id="word" x1="201" y1="20" x2="344" y2="62" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
+    </linearGradient>
+  </defs>
+  <rect width="360" height="80" rx="16" fill="#FFFFFF"/>
+  <g fill="url(#portal)" transform="translate(8 8)">
+    <path d="M18 6h11v12h-7a4 4 0 0 0-4 4v20a4 4 0 0 0 4 4h7v12H18C11.373 58 6 52.627 6 46V18C6 11.373 11.373 6 18 6Z"/>
+    <path d="M46 6H35v12h7a4 4 0 0 1 4 4v20a4 4 0 0 1-4 4h-7v12h11c6.627 0 12-5.373 12-12V18c0-6.627-5.373-12-12-12Z"/>
+    <path d="m32 21 11 11-11 11-11-11 11-11Z"/>
+  </g>
+  <text x="91" y="51" fill="#1C1917" font-family="Inter, Arial, 'PingFang SC', sans-serif" font-size="38" font-weight="700" letter-spacing="-1.5">Cloud<tspan fill="url(#word)">Drop</tspan></text>
+</svg>

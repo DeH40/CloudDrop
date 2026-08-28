@@ -1,7 +1,7 @@
 # CloudDrop
 
 <p align="center">
-  <img src="public/favicon.svg" alt="CloudDrop Logo" width="80" height="80">
+  <img src="public/logo.svg" alt="CloudDrop Blue Portal Logo" width="360" height="80">
 </p>
 
 <p align="center">

@@ -1,11 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <title>CloudDrop Blue Portal</title>
   <defs>
-    <linearGradient id="g" x1="8" y1="8" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#60a5fa"/>
-      <stop offset="1" stop-color="#a78bfa"/>
+    <linearGradient id="portal" x1="6" y1="6" x2="58" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
     </linearGradient>
   </defs>
-  <circle cx="24" cy="24" r="20" fill="url(#g)" opacity="0.2"/>
-  <path d="M24 8L24 28M24 28L32 20M24 28L16 20" stroke="url(#g)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M12 32L12 36C12 38.2091 13.7909 40 16 40L32 40C34.2091 40 36 38.2091 36 36L36 32" stroke="url(#g)" stroke-width="3" stroke-linecap="round"/>
+  <path fill="url(#portal)" d="M18 6h11v12h-7a4 4 0 0 0-4 4v20a4 4 0 0 0 4 4h7v12H18C11.373 58 6 52.627 6 46V18C6 11.373 11.373 6 18 6Z"/>
+  <path fill="url(#portal)" d="M46 6H35v12h7a4 4 0 0 1 4 4v20a4 4 0 0 1-4 4h-7v12h11c6.627 0 12-5.373 12-12V18c0-6.627-5.373-12-12-12Z"/>
+  <path fill="url(#portal)" d="m32 21 11 11-11 11-11-11 11-11Z"/>
 </svg>

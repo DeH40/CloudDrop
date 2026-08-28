@@ -35,7 +35,7 @@
   <title>CloudDrop - 安全 P2P 文件共享</title>
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <link rel="apple-touch-icon" href="/favicon.svg">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
   <!-- Fonts: Inter + Noto Sans SC from China-friendly CDN (loli.net mirror) -->
   <link rel="preconnect" href="https://fonts.loli.net" crossorigin>
   <link rel="stylesheet"
@@ -48,20 +48,8 @@
     <!-- Header -->
     <header class="header">
       <div class="logo">
-        <svg class="logo-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="24" cy="24" r="20" fill="url(#logoGradient)" opacity="0.2" />
-          <path d="M24 8L24 28M24 28L32 20M24 28L16 20" stroke="url(#logoGradient)" stroke-width="3"
-            stroke-linecap="round" stroke-linejoin="round" />
-          <path d="M12 32L12 36C12 38.2091 13.7909 40 16 40L32 40C34.2091 40 36 38.2091 36 36L36 32"
-            stroke="url(#logoGradient)" stroke-width="3" stroke-linecap="round" />
-          <defs>
-            <linearGradient id="logoGradient" x1="8" y1="8" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-              <stop stop-color="#60a5fa" />
-              <stop offset="1" stop-color="#a78bfa" />
-            </linearGradient>
-          </defs>
-        </svg>
-        <span class="logo-text">CloudDrop</span>
+        <img class="logo-icon" src="/favicon.svg" alt="CloudDrop">
+        <span class="logo-text" aria-hidden="true">Cloud<span class="logo-text-accent">Drop</span></span>
       </div>
       <div class="header-right">
         <div class="device-name-info">

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <title>CloudDrop Blue Portal 应用图标</title>
+  <defs>
+    <linearGradient id="app" x1="48" y1="48" x2="464" y2="464" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#app)"/>
+  <g fill="#FFFFFF" transform="translate(96 96) scale(5)">
+    <path d="M18 6h11v12h-7a4 4 0 0 0-4 4v20a4 4 0 0 0 4 4h7v12H18C11.373 58 6 52.627 6 46V18C6 11.373 11.373 6 18 6Z"/>
+    <path d="M46 6H35v12h7a4 4 0 0 1 4 4v20a4 4 0 0 1-4 4h-7v12h11c6.627 0 12-5.373 12-12V18c0-6.627-5.373-12-12-12Z"/>
+    <path d="m32 21 11 11-11 11-11-11 11-11Z"/>
+  </g>
+</svg>
