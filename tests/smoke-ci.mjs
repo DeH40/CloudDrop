@@ -4,6 +4,8 @@
  * （真实浏览器渲染/CSP 字体等仍建议本地 playwright 复核）
  */
 import { spawn } from 'node:child_process';
+import { once } from 'node:events';
+import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import WebSocket from 'ws';
 
@@ -53,7 +55,7 @@ function waitWsOpen(ws, timeout = 8000) {
     };
     const handleError = (error) => {
       cleanup();
-      reject(error);
+      reject(error.error || new Error('WebSocket open failed'));
     };
     ws.addEventListener('open', handleOpen);
     ws.addEventListener('error', handleError);
@@ -71,16 +73,32 @@ async function waitForServer(attempts = 40) {
   throw new Error('wrangler dev 启动超时');
 }
 
-const wrangler = spawn('npx', ['wrangler', 'dev', '--port', String(PORT)], {
-  cwd: new URL('..', import.meta.url).pathname,
+const npxCommand = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+const wrangler = spawn(npxCommand, ['wrangler', 'dev', '--port', String(PORT)], {
+  cwd: fileURLToPath(new URL('..', import.meta.url)),
   stdio: ['ignore', 'pipe', 'pipe'],
-  shell: true,
   detached: true, // 独立进程组，便于连子进程一起清理
 });
 
 let wranglerOutput = '';
 wrangler.stdout.on('data', (d) => { wranglerOutput += d.toString(); });
 wrangler.stderr.on('data', (d) => { wranglerOutput += d.toString(); });
+wrangler.on('error', (error) => { wranglerOutput += `${error.stack || error}\n`; });
+
+async function stopWrangler() {
+  const hasExited = () => wrangler.exitCode !== null || wrangler.signalCode !== null;
+  if (hasExited()) return;
+
+  const gracefulExit = once(wrangler, 'exit');
+  try { process.kill(-wrangler.pid, 'SIGTERM'); } catch (e) { /* already gone */ }
+  await Promise.race([gracefulExit, sleep(3000)]);
+
+  if (!hasExited()) {
+    const forcedExit = once(wrangler, 'exit');
+    try { process.kill(-wrangler.pid, 'SIGKILL'); } catch (e) { /* already gone */ }
+    await Promise.race([forcedExit, sleep(1000)]);
+  }
+}
 
 let exitCode = 0;
 let ws;
@@ -125,12 +143,12 @@ try {
   }
   console.log('SMOKE PASS');
 } catch (e) {
-  console.error('SMOKE FAIL:', e.message);
+  console.error('SMOKE FAIL:', e.message || String(e));
   console.error(wranglerOutput.slice(-2000));
   exitCode = 1;
 } finally {
   ws?.terminate();
-  try { process.kill(-wrangler.pid, 'SIGTERM'); } catch (e) { /* already gone */ }
+  await stopWrangler();
 }
 
 process.exitCode = exitCode;
