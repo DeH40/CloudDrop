@@ -59,10 +59,19 @@
   --accent-gradient: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
   --accent-glow: rgba(96, 165, 250, 0.3);
 
+  /* Interactive fills — 保证白色前景 ≥4.5:1（WCAG AA），深浅主题共用。
+     展示性渐变用 --accent-gradient，承载文字/图标的实心控件用下面这组。 */
+  --accent-strong: #2563eb;   /* 白字 5.17:1 */
+  --accent-strong-2: #6d4fd6; /* 白字 5.62:1 */
+  --btn-primary-gradient: linear-gradient(135deg, var(--accent-strong) 0%, var(--accent-strong-2) 100%);
+  --btn-success-gradient: linear-gradient(135deg, #047857 0%, #065f46 100%); /* 白字 5.48 / 7.68 */
+  --btn-danger-gradient: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);  /* 白字 4.83 / 6.47 */
+  --btn-danger-gradient-hover: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
+
   /* Text Colors */
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+  --text-muted: #828fa3; /* 5.04:1 on glass panel（原 #64748b 仅 3.47，不达 AA） */
   --text-on-accent: #ffffff;
 
   /* Status Colors */
@@ -154,10 +163,19 @@
 
   --text-primary: #1f2a3a;
   --text-secondary: #4b5a6d;
-  --text-muted: #6b7a8c;
+  --text-muted: #55637a; /* 5.56:1 on light glass（原 #6b7a8c 仅 4.01） */
 
-  /* Improve green text contrast on light theme */
-  --status-success: #15803d;
+  /* 亮色主题必须重调强调色与状态色：原值是为深色背景选的，
+     直接沿用会掉到 1.5–2.5:1。以下均为 ≥4.5:1 on #f4f6f8。 */
+  --accent-primary: #2563eb;   /* 4.77:1（原 #60a5fa 仅 2.35） */
+  --accent-secondary: #7c3aed; /* 5.26:1（原 #a78bfa 仅 2.72） */
+  --accent-blue: #2563eb;
+  --accent-gradient: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+
+  --status-success: #15803d; /* 4.63:1 */
+  --status-warning: #b45309; /* 4.64:1（原 #fbbf24 仅 1.54，近乎隐形） */
+  --status-error: #c81e1e;   /* 5.30:1（原 #f87171 仅 2.55） */
+  --status-info: #2563eb;    /* 4.77:1 */
 
   --accent-glow: rgba(59, 130, 246, 0.25);
   --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
@@ -179,7 +197,8 @@
 }
 
 html {
-  font-size: 16px;
+  /* 用 100% 而非固定 16px，让浏览器/系统字号设置能作用于整套 rem 令牌 */
+  font-size: 100%;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -748,7 +767,7 @@ body::after {
 }
 
 .peer-action-btn:hover {
-  background: var(--accent-gradient);
+  background: var(--btn-primary-gradient);
   color: var(--text-on-accent);
   border-color: transparent;
   box-shadow: 0 0 15px var(--accent-glow);
@@ -1271,7 +1290,7 @@ body::after {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--accent-gradient);
+  background: var(--btn-primary-gradient);
   border-radius: var(--radius-lg);
   color: var(--text-on-accent);
   flex-shrink: 0;
@@ -1284,27 +1303,27 @@ body::after {
 
 /* File type specific icons */
 .file-icon-large.image {
-  background: linear-gradient(135deg, #f472b6 0%, #ec4899 100%);
+  background: linear-gradient(135deg, #db2777 0%, #be185d 100%);
 }
 
 .file-icon-large.video {
-  background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
 }
 
 .file-icon-large.audio {
-  background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
 }
 
 .file-icon-large.document {
-  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
 }
 
 .file-icon-large.archive {
-  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  background: linear-gradient(135deg, #b45309 0%, #92400e 100%);
 }
 
 .file-icon-large.code {
-  background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+  background: linear-gradient(135deg, #047857 0%, #065f46 100%);
 }
 
 .file-details {
@@ -1555,14 +1574,14 @@ body::after {
 }
 
 .peer-trusted-badge:hover::after {
-  content: '取消信任';
+  content: attr(data-tooltip);
   position: absolute;
   bottom: 100%;
   left: 50%;
   transform: translateX(-50%);
   padding: 4px 8px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
   font-size: 11px;
   white-space: nowrap;
@@ -1610,7 +1629,7 @@ body::after {
   justify-content: center;
   background: rgba(251, 191, 36, 0.15);
   border-radius: 50%;
-  color: #fbbf24;
+  color: var(--status-warning);
 }
 
 .confirm-icon svg {
@@ -1659,13 +1678,13 @@ body::after {
 }
 
 .btn-danger {
-  background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
+  background: var(--btn-danger-gradient);
   color: var(--text-on-accent);
   border: none;
 }
 
 .btn-danger:hover {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  background: var(--btn-danger-gradient-hover);
   transform: translateY(-1px);
 }
 
@@ -1979,7 +1998,7 @@ body::after {
 }
 
 .btn-primary {
-  background: var(--accent-gradient);
+  background: var(--btn-primary-gradient);
   color: var(--text-on-accent);
 }
 
@@ -2766,7 +2785,7 @@ body::after {
    Selection Colors
    ============================================ */
 ::selection {
-  background: var(--accent-primary);
+  background: var(--accent-strong);
   color: var(--text-on-accent);
 }
 
@@ -2899,7 +2918,7 @@ body::after {
   width: 24px;
   height: 24px;
   padding: 4px;
-  background: var(--accent-gradient);
+  background: var(--btn-primary-gradient);
   border-radius: var(--radius-sm);
   color: var(--text-on-accent);
   flex-shrink: 0;
@@ -3061,7 +3080,7 @@ body::after {
 }
 
 .chat-message.sent .chat-bubble {
-  background: var(--accent-gradient);
+  background: var(--btn-primary-gradient);
   color: var(--text-on-accent);
 }
 
@@ -3175,7 +3194,7 @@ body::after {
 }
 
 .btn-send {
-  background: var(--accent-gradient);
+  background: var(--btn-primary-gradient);
   color: var(--text-on-accent);
   border-radius: 50%;
   width: 40px;
@@ -3720,7 +3739,7 @@ body::after {
 }
 
 .theme-option input:checked + .theme-option-content {
-  background: var(--accent-gradient);
+  background: var(--btn-primary-gradient);
   color: var(--text-on-accent);
   box-shadow: 0 0 20px var(--accent-glow);
 }
@@ -4187,7 +4206,7 @@ body::after {
   min-width: 56px;
   padding: 0;
   margin-top: -20px;
-  background: var(--accent-gradient);
+  background: var(--btn-primary-gradient);
   border-radius: 50%;
   color: var(--text-on-accent);
   box-shadow: 0 4px 20px rgba(96, 165, 250, 0.4);
@@ -4368,7 +4387,7 @@ body::after {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--accent-gradient);
+  background: var(--btn-primary-gradient);
   border-radius: var(--radius-md);
   color: var(--text-on-accent);
   flex-shrink: 0;
@@ -4437,7 +4456,7 @@ body::after {
 }
 
 .empty-action-btn.primary {
-  background: var(--accent-gradient);
+  background: var(--btn-primary-gradient);
   color: var(--text-on-accent);
   border: none;
 }
@@ -4758,7 +4777,7 @@ body::after {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--accent-gradient);
+  background: var(--btn-primary-gradient);
   border-radius: 50%;
   color: var(--text-on-accent);
   flex-shrink: 0;
@@ -5355,7 +5374,7 @@ html {
 
 /* Create Secure Room Button Enhancement */
 #createSecureRoomConfirm {
-  background: linear-gradient(135deg, var(--status-success) 0%, #059669 100%);
+  background: var(--btn-success-gradient);
 }
 
 #createSecureRoomConfirm:hover {
@@ -5533,7 +5552,7 @@ html {
 }
 
 .language-menu-item.active {
-  color: var(--primary);
+  color: var(--accent-primary);
   font-weight: 600;
   background: linear-gradient(90deg, rgba(96, 165, 250, 0.15) 0%, rgba(167, 139, 250, 0.1) 100%);
 }
@@ -5556,7 +5575,7 @@ html {
   height: 16px;
   opacity: 0;
   transition: all 0.2s ease;
-  color: var(--primary);
+  color: var(--accent-primary);
   transform: scale(0.8);
 }
 

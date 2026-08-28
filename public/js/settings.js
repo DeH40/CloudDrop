@@ -186,6 +186,8 @@ export const SettingsMixin = {
       const badge = document.createElement('div');
       badge.className = 'peer-trusted-badge';
       badge.title = i18n.t('settings.clickToUntrust');
+      // CSS 悬浮提示原先把「取消信任」硬编码在 content 里，无法翻译
+      badge.dataset.tooltip = i18n.t('settings.untrust');
       badge.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>`;
 
       // Click to untrust
