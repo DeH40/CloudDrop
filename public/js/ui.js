@@ -526,15 +526,84 @@ export function updateEmptyState() {
   if (grid && empty) empty.classList.toggle('hidden', grid.children.length > 0);
 }
 
+// ============================================
+// Modal manager
+// 遮罩点击 / Esc 必须与 X 按钮走同一条业务路径。否则会出现：
+//   - 接收弹窗被关掉但没发拒绝 → 发送方一直卡在「等待确认」直到超时
+//   - 传输弹窗被关掉但传输继续 → 用户看不到进度也无法取消
+//   - 下载弹窗被关掉但 Blob 未释放，且 downloadQueue 不推进 → 后续文件永不弹出
+// ============================================
+
+/**
+ * id -> 关闭语义
+ * @type {Map<string, {dismissible?: boolean|(() => boolean), onDismiss?: () => void}>}
+ */
+const modalPolicies = new Map();
+
+/** 当前打开的弹窗 id 栈（后进先出），用于 Esc 只关顶层 + body 滚动锁计数 */
+const modalStack = [];
+
+/**
+ * 注册弹窗的关闭语义
+ * @param {string} id - 弹窗元素 id
+ * @param {Object} [policy]
+ * @param {boolean|Function} [policy.dismissible=true] - 是否允许遮罩/Esc 关闭；传函数可动态判断
+ * @param {Function} [policy.onDismiss] - 遮罩/Esc 关闭时执行，需自行负责隐藏弹窗
+ */
+export function registerModal(id, policy = {}) {
+  modalPolicies.set(id, policy);
+}
+
+export function unregisterModal(id) {
+  modalPolicies.delete(id);
+}
+
+function isDismissible(id) {
+  const policy = modalPolicies.get(id);
+  if (!policy || policy.dismissible === undefined) return true;
+  return typeof policy.dismissible === 'function' ? policy.dismissible() : policy.dismissible;
+}
+
+// 只有栈空时才解锁滚动，避免叠加弹窗时关掉上层就把底层的锁一起解掉
+function syncBodyScrollLock() {
+  document.body.style.overflow = modalStack.length > 0 ? 'hidden' : '';
+}
+
 // Modal functions
 export function showModal(id) {
   const m = document.getElementById(id);
-  if (m) { m.classList.add('active'); document.body.style.overflow = 'hidden'; }
+  if (!m) return;
+  m.classList.add('active');
+  const i = modalStack.indexOf(id);
+  if (i !== -1) modalStack.splice(i, 1);
+  modalStack.push(id);
+  syncBodyScrollLock();
 }
 
 export function hideModal(id) {
   const m = document.getElementById(id);
-  if (m) { m.classList.remove('active'); document.body.style.overflow = ''; }
+  if (m) m.classList.remove('active');
+  const i = modalStack.indexOf(id);
+  if (i !== -1) modalStack.splice(i, 1);
+  syncBodyScrollLock();
+}
+
+/**
+ * 用户主动关闭（遮罩点击 / Esc）。走注册的关闭语义，而不是直接摘掉 .active。
+ * @param {string} id
+ * @returns {boolean} 是否真的关闭了
+ */
+export function dismissModal(id) {
+  if (!id || !isDismissible(id)) return false;
+  const onDismiss = modalPolicies.get(id)?.onDismiss;
+  if (onDismiss) onDismiss();
+  else hideModal(id);
+  return true;
+}
+
+/** 栈顶（最上层）弹窗 id */
+export function getTopModal() {
+  return modalStack[modalStack.length - 1] || null;
 }
 
 /**
@@ -618,7 +687,7 @@ export function showConfirmDialog(options = {}) {
     const cleanup = () => {
       confirmBtn.removeEventListener('click', onConfirm);
       cancelBtn.removeEventListener('click', onCancel);
-      backdrop?.removeEventListener('click', onCancel);
+      unregisterModal('confirmDialog');
       hideModal('confirmDialog');
     };
 
@@ -635,10 +704,9 @@ export function showConfirmDialog(options = {}) {
     // Attach event listeners
     confirmBtn.addEventListener('click', onConfirm);
     cancelBtn.addEventListener('click', onCancel);
-    
-    // Click backdrop to cancel
-    const backdrop = dialog.querySelector('.modal-backdrop');
-    backdrop?.addEventListener('click', onCancel);
+
+    // 遮罩点击 / Esc 也必须走取消，否则 Promise 永不 settle 且监听器泄漏
+    registerModal('confirmDialog', { onDismiss: onCancel });
 
     // Show dialog
     showModal('confirmDialog');
@@ -647,14 +715,26 @@ export function showConfirmDialog(options = {}) {
 
 export function hideAllModals() {
   document.querySelectorAll('.modal.active').forEach(m => m.classList.remove('active'));
-  document.body.style.overflow = '';
+  modalStack.length = 0;
+  syncBodyScrollLock();
 }
 
 export function setupModalCloseHandlers() {
   document.querySelectorAll('.modal-backdrop').forEach(b => {
-    b.addEventListener('click', () => { b.closest('.modal')?.classList.remove('active'); document.body.style.overflow = ''; });
+    b.addEventListener('click', () => {
+      const modal = b.closest('.modal');
+      if (!modal) return;
+      if (modal.id) dismissModal(modal.id);
+      else hideModal(modal.id);
+    });
   });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') hideAllModals(); });
+
+  // Esc 只关闭最上层弹窗，且同样走关闭语义
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    const top = getTopModal();
+    if (top && dismissModal(top)) e.preventDefault();
+  });
 }
 
 // Transfer progress
@@ -871,19 +951,21 @@ export function showPasswordStrength(strength) {
 
   container.style.display = 'flex';
 
-  const strengthConfig = {
-    0: { width: '25%', color: '#f87171', text: '弱' },
-    1: { width: '50%', color: '#fbbf24', text: '一般' },
-    2: { width: '75%', color: '#34d399', text: '良好' },
-    3: { width: '100%', color: '#10b981', text: '强' }
-  };
+  // 走主题令牌 + i18n：原实现硬编码 hex（亮色主题下 #fbbf24 只有 1.54:1）
+  // 且硬编码中文，而 room.passwordStrength.* 在 9 个语言包里本就齐备。
+  const levels = [
+    { width: '25%', token: 'var(--status-error)', key: 'room.passwordStrength.weak' },
+    { width: '50%', token: 'var(--status-warning)', key: 'room.passwordStrength.fair' },
+    { width: '75%', token: 'var(--status-success)', key: 'room.passwordStrength.good' },
+    { width: '100%', token: 'var(--status-success)', key: 'room.passwordStrength.strong' }
+  ];
 
-  const config = strengthConfig[strength] || strengthConfig[0];
+  const level = levels[strength] || levels[0];
 
-  fill.style.width = config.width;
-  fill.style.background = config.color;
-  text.textContent = config.text;
-  text.style.color = config.color;
+  fill.style.width = level.width;
+  fill.style.background = level.token;
+  text.textContent = i18n.t(level.key);
+  text.style.color = level.token;
 }
 
 /**

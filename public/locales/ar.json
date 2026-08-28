@@ -121,6 +121,7 @@
     "waitingFor": "في انتظار تأكيد {{name}}...",
     "cancelTransfer": "إلغاء النقل",
     "transferCancelled": "تم إلغاء النقل",
+    "senderCancelled": "ألغى {{name}} الإرسال",
     "transferComplete": "اكتمل النقل",
     "releaseToDrop": "أفلت لإرسال الملف",
     "fileCount": {

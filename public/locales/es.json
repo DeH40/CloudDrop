@@ -121,6 +121,7 @@
     "waitingFor": "Esperando que {{name}} confirme...",
     "cancelTransfer": "Cancelar transferencia",
     "transferCancelled": "Transferencia cancelada",
+    "senderCancelled": "{{name}} canceló el envío",
     "transferComplete": "Transferencia completada",
     "releaseToDrop": "Soltar para enviar archivo",
     "fileCount": {

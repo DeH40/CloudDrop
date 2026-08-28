@@ -121,6 +121,7 @@
     "waitingFor": "{{name}}의 확인을 기다리는 중...",
     "cancelTransfer": "전송 취소",
     "transferCancelled": "전송이 취소됨",
+    "senderCancelled": "{{name}}님이 전송을 취소했습니다",
     "transferComplete": "전송 완료",
     "releaseToDrop": "놓아서 파일 전송",
     "fileCount": {

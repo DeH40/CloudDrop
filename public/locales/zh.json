@@ -121,6 +121,7 @@
     "waitingFor": "等待 {{name}} 确认接收...",
     "cancelTransfer": "取消传输",
     "transferCancelled": "传输已取消",
+    "senderCancelled": "{{name}} 已取消发送",
     "transferIncomplete": "传输失败：文件不完整，请重试",
     "safetyCodeTitle": "安全码：两台设备显示一致即确认连接未被中间人篡改",
     "transferComplete": "传输完成",

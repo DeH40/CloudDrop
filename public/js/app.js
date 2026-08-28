@@ -36,6 +36,7 @@ class CloudDrop {
     this.unreadMessages = new Map(); // peerId -> unread count
     this.pendingFileRequest = null; // Current pending file request waiting for user decision
     this.currentTransfer = null; // Current active transfer { peerId, fileId, fileName, direction }
+    this.pendingSend = null; // 本端已发出、正在等对方确认的发送 { peerId }
     this.pendingImage = null; // Pending image to send { dataUrl, file }
 
     // Trusted devices - auto-accept files from these devices
@@ -418,6 +419,7 @@ class CloudDrop {
    */
   async bootstrapUI() {
     ui.setupModalCloseHandlers();
+    this.registerModalPolicies();
     ui.updateEmptyState();
     this.updateDeviceNameDisplay();
     this.setupKeyboardDetection();
@@ -425,6 +427,28 @@ class CloudDrop {
 
     // Check notification permission on startup
     await this.checkNotificationPermission();
+  }
+
+  /**
+   * 弹窗关闭语义：遮罩点击 / Esc 必须与 X 按钮走同一条业务路径。
+   * 未注册的弹窗默认「可关闭且只是隐藏」，行为与原先一致。
+   */
+  registerModalPolicies() {
+    // 关掉接收确认 = 拒绝，否则发送方会一直等到超时
+    ui.registerModal('receiveModal', {
+      onDismiss: () => this.declineFileRequest()
+    });
+
+    // 等待确认中 / 传输中不允许误触遮罩或 Esc 关闭，必须显式取消
+    ui.registerModal('transferModal', {
+      dismissible: () => !this.currentTransfer && !this.pendingSend,
+      onDismiss: () => this.cancelCurrentTransfer()
+    });
+
+    // 关掉下载弹窗必须释放 Blob URL 并推进下载队列
+    ui.registerModal('fileDownloadModal', {
+      onDismiss: () => this.cleanupDownloadModal()
+    });
   }
 
   /**
@@ -981,13 +1005,28 @@ class CloudDrop {
 
     // Transfer start callback (for tracking fileId)
     this.webrtc.onTransferStart = ({ peerId, fileId, fileName, direction }) => {
+      // 对方已确认，离开「等待确认」阶段：之后的取消要走真正的 cancelTransfer
+      this.pendingSend = null;
       this.currentTransfer = { peerId, fileId, fileName, direction };
     };
 
     // Transfer cancelled callback
     this.webrtc.onTransferCancelled = (peerId, fileId, reason) => {
       const peer = this.peers.get(peerId);
+      this.pendingSend = null;
       ui.hideModal('transferModal');
+
+      // 接收侧：发送方在我们还没点「接受/拒绝」时撤回了请求，
+      // 必须把「收到文件」确认框一起关掉，否则会一直挂着一个已失效的请求。
+      if (this.pendingFileRequest && this.pendingFileRequest.peerId === peerId) {
+        this.pendingFileRequest = null;
+        ui.hideModal('receiveModal');
+        ui.showToast(i18n.t('transfer.senderCancelled', {
+          name: peer?.name || i18n.t('deviceTypes.unknown')
+        }), 'info');
+        this.currentTransfer = null;
+        return;
+      }
 
       if (reason === 'user') {
         ui.showToast(i18n.t('transfer.transferCancelled'), 'warning');
@@ -1358,6 +1397,18 @@ class CloudDrop {
    * Cancel the current active transfer
    */
   cancelCurrentTransfer() {
+    // 阶段一：还在等对方确认 —— 撤回请求，弹窗与提示由 handleSendError 统一收口
+    if (this.pendingSend) {
+      const { peerId } = this.pendingSend;
+      this.pendingSend = null;
+      const cancelled = this.webrtc.cancelPendingFileRequests(peerId);
+      if (!cancelled) {
+        // 请求已在同一 tick 内落地（对方刚确认），退回常规路径
+        ui.hideModal('transferModal');
+      }
+      return;
+    }
+
     if (!this.currentTransfer) {
       ui.hideModal('transferModal');
       return;
@@ -1518,7 +1569,7 @@ class CloudDrop {
     }
 
     // 多文件：一次确认框，确认后逐个传输
-    this.showWaitingForConfirmation(peerName, i18n.t('transfer.fileCount', { count: files.length }));
+    this.showWaitingForConfirmation(peerName, i18n.t('transfer.fileCount', { count: files.length }), peerId);
 
     try {
       await this.webrtc.sendFiles(peerId, files);
@@ -1527,6 +1578,7 @@ class CloudDrop {
     } catch (e) {
       this.handleSendError(e, peerName);
     } finally {
+      this.pendingSend = null;
       this.currentTransfer = null;
     }
   }
@@ -1536,7 +1588,7 @@ class CloudDrop {
    */
   async sendSingleFile(peerId, file, peerName) {
     // Show waiting for confirmation
-    this.showWaitingForConfirmation(peerName, file.name);
+    this.showWaitingForConfirmation(peerName, file.name, peerId);
 
     try {
       // sendFile now handles the request/confirm flow internally
@@ -1549,6 +1601,7 @@ class CloudDrop {
     } catch (e) {
       this.handleSendError(e, peerName);
     } finally {
+      this.pendingSend = null;
       this.currentTransfer = null;
     }
   }
@@ -1579,7 +1632,10 @@ class CloudDrop {
   /**
    * Show modal indicating waiting for recipient to accept
    */
-  showWaitingForConfirmation(peerName, fileName) {
+  showWaitingForConfirmation(peerName, fileName, peerId = null) {
+    // 记录「等待对方确认」状态：用于阻止误触关闭，并让取消能撤回请求
+    this.pendingSend = peerId ? { peerId } : null;
+
     document.getElementById('modalTitle').textContent = i18n.t('transfer.waitingConfirm');
     document.getElementById('transferFileName').textContent = fileName;
     document.getElementById('transferFileSize').textContent = i18n.t('transfer.waitingFor', { name: peerName });
@@ -1993,12 +2049,9 @@ class CloudDrop {
 
     // Modal close buttons
     document.getElementById('modalClose')?.addEventListener('click', () => {
-      // If there's an active transfer, ask for confirmation
-      if (this.currentTransfer) {
-        this.cancelCurrentTransfer();
-      } else {
-        ui.hideModal('transferModal');
-      }
+      // 无论处于「等待对方确认」还是「传输中」，X 都必须走取消路径；
+      // 空闲态下 cancelCurrentTransfer() 会退化为单纯隐藏弹窗。
+      this.cancelCurrentTransfer();
     });
 
     // Cancel transfer button

@@ -1297,6 +1297,36 @@ export class WebRTCManager {
   }
 
   /**
+   * 撤回本端所有「等待对方确认」的发送请求（用户在确认阶段主动取消）。
+   * 除了 reject 本地 Promise，还必须发 file-cancel 通知对方，
+   * 否则对方的「收到文件」确认框会一直挂着，本端请求也要等到
+   * FILE_REQUEST_TIMEOUT 才结束。
+   * @param {string} [peerId] - 只撤回发往该 peer 的请求；省略则全部撤回
+   * @returns {number} 实际撤回的请求数
+   */
+  cancelPendingFileRequests(peerId) {
+    let cancelled = 0;
+    // 快照迭代：pending.reject() 内部会 clearTimeout 并从 Map 中删除自身
+    for (const [requestId, pending] of Array.from(this.pendingFileRequests.entries())) {
+      if (peerId && pending.peerId !== peerId) continue;
+      cancelled++;
+
+      // 先通知对方关掉确认框（批量请求时 requestId 即 batchId，与 file-response 一致）
+      this.signaling.send({
+        type: 'file-cancel',
+        to: pending.peerId,
+        data: { fileId: requestId, reason: 'user' }
+      });
+
+      pending.reject(new Error(ERROR_CODES.FILE_CANCELLED));
+    }
+    if (cancelled) {
+      debugLog(`[WebRTC] Cancelled ${cancelled} pending file request(s)${peerId ? ` to ${peerId}` : ''}`);
+    }
+    return cancelled;
+  }
+
+  /**
    * Handle file response (accept/decline from recipient)
    */
   handleFileResponse(peerId, data) {

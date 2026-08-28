@@ -121,6 +121,7 @@
     "waitingFor": "En attente de confirmation de {{name}}...",
     "cancelTransfer": "Annuler le transfert",
     "transferCancelled": "Transfert annulé",
+    "senderCancelled": "{{name}} a annulé l’envoi",
     "transferComplete": "Transfert terminé",
     "releaseToDrop": "Relâcher pour envoyer le fichier",
     "fileCount": {

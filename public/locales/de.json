@@ -121,6 +121,7 @@
     "waitingFor": "Warte auf Bestätigung von {{name}}...",
     "cancelTransfer": "Übertragung abbrechen",
     "transferCancelled": "Übertragung abgebrochen",
+    "senderCancelled": "{{name}} hat die Übertragung abgebrochen",
     "transferComplete": "Übertragung abgeschlossen",
     "releaseToDrop": "Loslassen zum Senden der Datei",
     "fileCount": {

@@ -121,6 +121,7 @@
     "waitingFor": "等待 {{name}} 確認接收...",
     "cancelTransfer": "取消傳輸",
     "transferCancelled": "傳輸已取消",
+    "senderCancelled": "{{name}} 已取消傳送",
     "transferComplete": "傳輸完成",
     "releaseToDrop": "放開以發送文件",
     "fileCount": {

@@ -121,6 +121,7 @@
     "waitingFor": "{{name}}の確認を待っています...",
     "cancelTransfer": "転送をキャンセル",
     "transferCancelled": "転送がキャンセルされました",
+    "senderCancelled": "{{name}} が送信をキャンセルしました",
     "transferComplete": "転送完了",
     "releaseToDrop": "放してファイルを送信",
     "fileCount": {

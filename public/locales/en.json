@@ -121,6 +121,7 @@
     "waitingFor": "Waiting for {{name}} to confirm...",
     "cancelTransfer": "Cancel Transfer",
     "transferCancelled": "Transfer cancelled",
+    "senderCancelled": "{{name}} cancelled the transfer",
     "transferIncomplete": "Transfer failed: file incomplete, please retry",
     "safetyCodeTitle": "Safety code: if both devices show the same code, the connection is not tampered with",
     "transferComplete": "Transfer complete",
