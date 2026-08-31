@@ -5,7 +5,7 @@
 import { WebRTCManager } from './webrtc.js';
 import { cryptoManager } from './crypto.js';
 import * as ui from './ui.js';
-import { STORAGE_KEYS, ROOM, DEFAULT_SETTINGS, ERROR_CODES } from './config.js';
+import { STORAGE_KEYS, SESSION_KEYS, ROOM, DEFAULT_SETTINGS, ERROR_CODES } from './config.js';
 import { i18n } from './i18n.js';
 import { debugLog } from './logger.js';
 import { ChatMixin } from './chat.js';
@@ -86,8 +86,8 @@ class CloudDrop {
     // 房间内设置密码（防抢注的创建流程）
     this._setPasswordPending = false;
     this._setPasswordResolve = null;
-    // 设密失败已自行提示，抑制 onclose(4002) 的通用密码错误提示
-    this._suppressCloseToast = false;
+    // 本次启动是否用会话里记住的密码自动恢复了加密房间（用于提示一次）
+    this._restoredSecureSession = false;
 
     // 每 peer 消息队列（保证 chunk 处理完成后才处理 file-end）
     this.peerMsgQueues = new Map();
@@ -304,17 +304,26 @@ class CloudDrop {
 
       if (result.success) {
         debugLog('[App] Secure room created:', roomCode);
+        // 创建流程不走 challenge/auth，在这里记住密码，刷新后可直接重连
+        this.rememberSecureRoomSession(roomCode, password);
         return true;
       }
 
       // 设置失败（房间已被他人加密/超时）：清理本地状态，回到密码输入流程。
-      // 提示先于 close(4002) 发出，onclose 的通用提示会被这条更具体的原因抑制
+      // 未认证连接的 close 握手服务端不回应，onclose 可能迟到甚至不来，
+      // 所以这里自己把提示和后续 UI 全部收口，并摘掉旧连接的回调
       ui.showToast(this.secureCreateErrorMessage(result.error), 'error');
       this.clearRoomPassword();
-      if (this.ws && this.ws.readyState !== WebSocket.CLOSED) {
-        this._suppressCloseToast = true;
-        this.ws.close(4002, 'set password failed');
+      if (this.ws) {
+        this.ws.onclose = null;
+        this.ws.onmessage = null;
+        try {
+          this.ws.close(4002, 'set password failed');
+        } catch (e) {
+          // 已在关闭中，忽略
+        }
       }
+      ui.updateConnectionStatus('disconnected');
       // 创建已失败，别把创建弹窗留在密码输入框底下叠着
       ui.hideModal('createSecureRoomModal');
       ui.showJoinRoomModal(roomCode, true);
@@ -409,7 +418,101 @@ class CloudDrop {
     this.isSecureRoom = false;
     cryptoManager.clearRoomPassword();
     this.updateRoomSecurityBadge();
+    // 密码已失效（认证失败/房间过期/被他人锁定/换房间），会话缓存必须一起清，
+    // 否则刷新会拿着废密码重试
+    this.clearSecureRoomSession();
     debugLog('[App] Room password cleared');
+  }
+
+  /**
+   * 记住已通过认证的房间密码，供本标签页刷新后自动重连。
+   * 只写 sessionStorage：关闭标签页即失效，不落盘长期保存。
+   * @param {string} roomCode
+   * @param {string} password
+   */
+  rememberSecureRoomSession(roomCode, password) {
+    if (!roomCode || !password) return;
+    try {
+      sessionStorage.setItem(SESSION_KEYS.SECURE_ROOM, JSON.stringify({ roomCode, password }));
+      debugLog('[App] 加密房间会话已记住:', roomCode);
+    } catch (e) {
+      // 隐私模式/存储被禁：退化为每次刷新手动输密码
+      debugLog('[App] 无法写入会话存储，刷新后需重新输入密码');
+    }
+  }
+
+  clearSecureRoomSession() {
+    try {
+      sessionStorage.removeItem(SESSION_KEYS.SECURE_ROOM);
+    } catch (e) {
+      // 忽略：存储不可用时本来也没写进去
+    }
+  }
+
+  /**
+   * 刷新后用本标签页记住的密码恢复加密房间，免去重复输入。
+   * 房间号不符或房间已不再加密时顺手清掉缓存，不让密码白留在会话里。
+   * @param {string} roomCode - URL 中的房间号（已大写）
+   * @param {boolean} requiresPassword - 服务端是否仍要求该房间的密码
+   * @returns {Promise<boolean>} 是否恢复成功
+   */
+  async restoreSecureRoomSession(roomCode, requiresPassword) {
+    let saved = null;
+    try {
+      saved = JSON.parse(sessionStorage.getItem(SESSION_KEYS.SECURE_ROOM) || 'null');
+    } catch (e) {
+      saved = null;
+    }
+
+    if (saved && (saved.roomCode !== roomCode || !requiresPassword)) {
+      this.clearSecureRoomSession();
+      saved = null;
+    }
+
+    if (!saved?.password || !requiresPassword) return false;
+
+    // 密钥派生失败时清掉缓存回落到手动输入，别让刷新卡在自动重试上
+    const ok = await this.joinSecureRoom(roomCode, saved.password);
+    if (!ok) {
+      this.clearSecureRoomSession();
+      return false;
+    }
+
+    debugLog('[App] 已从会话恢复加密房间密码:', roomCode);
+    return true;
+  }
+
+  /**
+   * 密码被服务端拒绝后的收口：断链 + 清场 + 拉起密码输入。
+   * 不依赖 onclose——未认证连接的 close 握手服务端不回应，事件可能迟到 8 秒。
+   * 调用前应已 clearRoomPassword()。
+   */
+  handlePasswordRejected() {
+    if (this._secureJoinTimeout) {
+      clearTimeout(this._secureJoinTimeout);
+      this._secureJoinTimeout = null;
+    }
+
+    if (this.ws) {
+      // 自己收口，迟到的 onclose 不该再重复提示或触发自动重连
+      this.ws.onclose = null;
+      this.ws.onmessage = null;
+      try {
+        this.ws.close(4002, 'password error');
+      } catch (e) {
+        // 已在关闭中，忽略
+      }
+    }
+
+    ui.updateConnectionStatus('disconnected');
+    // 房间进不去，旧链路和设备列表全部作废
+    this.webrtc?.closeAll();
+    this.peers.clear();
+    ui.clearPeersGrid(document.getElementById('peersGrid'));
+
+    if (this.roomCode) {
+      ui.showJoinRoomModal(this.roomCode, true);
+    }
   }
 
   async init() {
@@ -438,7 +541,12 @@ class CloudDrop {
     // If joining a specific room, check if it requires password
     if (this.roomCode) {
       const requiresPassword = await this.checkRoomPassword(this.roomCode);
-      if (requiresPassword) {
+      // 刷新前已认证过的房间：用本标签页记住的密码直接重连，不再弹密码框。
+      // 密码若已失效，服务端会回 PASSWORD_INCORRECT，届时清缓存并弹框
+      const restored = await this.restoreSecureRoomSession(this.roomCode, requiresPassword);
+      if (restored) {
+        this._restoredSecureSession = true;
+      } else if (requiresPassword) {
         // Show password prompt before connecting
         ui.showJoinRoomModal(this.roomCode, true); // true = password required
         // Will connect after user enters password
@@ -448,6 +556,9 @@ class CloudDrop {
         await this.bootstrapUI();
         return;
       }
+    } else {
+      // 未指定房间（按 IP 自动分配）不可能是恢复加密房间，别让密码白留在会话里
+      this.clearSecureRoomSession();
     }
 
     this.updateRoomDisplay();
@@ -874,9 +985,10 @@ class CloudDrop {
           case 'PASSWORD_INCORRECT':
             ui.showToast(i18n.t('room.passwordError'), 'error');
             this.clearRoomPassword();
-            // 主动以 4002 关闭：服务端前 4 次错误不会关闭连接，
-            // 等待服务端关闭会卡死；onclose(4002) 会弹密码框且不自动重连
-            if (this.ws) this.ws.close(4002, 'password error');
+            // 认证失败的连接服务端不回 close 握手，close(4002) 只能把它推到
+            // CLOSING，onclose 要等到挑战超时（8s）才被兜底触发。所以这里
+            // 自己收口，别把「弹密码框」压在一个可能不来的事件上
+            this.handlePasswordRejected();
             break;
           case 'MESSAGE_TOO_LARGE':
             ui.showToast(i18n.t('errors.messageTooLarge'), 'error');
@@ -943,20 +1055,17 @@ class CloudDrop {
       if (event.code === 4001 || event.code === 4002) {
         // Password error - don't auto-reconnect
         ui.updateConnectionStatus('disconnected');
-        // 设密失败已给出更具体的原因，别再叠一条通用提示
-        if (this._suppressCloseToast) {
-          this._suppressCloseToast = false;
-        } else {
-          ui.showToast(event.code === 4001 ? i18n.t('room.passwordRequired') : i18n.t('room.passwordError'), 'error');
-        }
+        ui.showToast(event.code === 4001 ? i18n.t('room.passwordRequired') : i18n.t('room.passwordError'), 'error');
         this.clearRoomPassword();
         // 关闭旧 P2P 连接并清空设备列表：房间已被锁定，旧链路全部作废
         this.webrtc?.closeAll();
         this.peers.clear();
         ui.clearPeersGrid(document.getElementById('peersGrid'));
         // Show join room modal again with password input
+        // 4001/4002 都意味着「需要密码」，必须把密码输入区一起打开，
+        // 否则弹出的框只有房间号，用户无从重新认证
         if (this.roomCode) {
-          ui.showJoinRoomModal(this.roomCode);
+          ui.showJoinRoomModal(this.roomCode, true);
         }
         return;
       }
@@ -1200,6 +1309,16 @@ class CloudDrop {
     debugLog('[Signaling] Received:', msg.type, msg);
     switch (msg.type) {
       case 'auth-success':
+        // 密码已被服务端验证通过，此刻才值得记住（错密码不会写进会话缓存）
+        if (this.roomCode && this.roomPassword) {
+          this.rememberSecureRoomSession(this.roomCode, this.roomPassword);
+        }
+        // 自动恢复要给一次明确反馈，否则用户不清楚这次为何没问密码。
+        // 停留久一点：这条同时是"密码已被本标签页记住"的安全告知
+        if (this._restoredSecureSession) {
+          this._restoredSecureSession = false;
+          ui.showToast(i18n.t('room.secureSessionRestored'), 'info', 5000);
+        }
         // Authentication successful, now join the room
         this.sendJoinMessage();
         break;

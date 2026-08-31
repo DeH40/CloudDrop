@@ -180,6 +180,7 @@
     "createSecureFailed": "암호화 방 생성 실패",
     "alreadyTakenByOther": "이 방은 이미 암호화되어 있습니다. 비밀번호를 입력해 참여하세요.",
     "createSuccess": "암호화된 방이 성공적으로 생성됨",
+    "secureSessionRestored": "이 세션에 기억된 비밀번호로 암호화 방에 다시 참여했습니다",
     "passwordError": "비밀번호가 올바르지 않음",
     "alreadySecure": "이미 암호화된 방에 있습니다",
     "secureRoomActive": "암호화된 방 - 비밀번호 보호 활성화됨",

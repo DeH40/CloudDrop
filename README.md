@@ -179,7 +179,7 @@ CloudDrop implements multiple layers of security:
 1. **Transport Encryption** - All WebRTC connections use DTLS
 2. **Application Encryption** - AES-256-GCM with per-session keys
 3. **Key Exchange** - ECDH (P-256) for secure key negotiation
-4. **Room Passwords** - Optional password protection with PBKDF2 derivation
+4. **Room Passwords** - Optional password protection with PBKDF2 derivation. Once authenticated, the password is kept in `sessionStorage` so refreshing the page rejoins automatically; it is cleared when the tab closes and never written to `localStorage`.
 5. **Zero Knowledge** - Server never sees file contents or encryption keys
 
 ## 🌟 Star History

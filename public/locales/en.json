@@ -183,6 +183,7 @@
     "createSecureFailed": "Failed to create secure room",
     "alreadyTakenByOther": "This room is already encrypted. Enter its password to join.",
     "createSuccess": "Encrypted room created successfully",
+    "secureSessionRestored": "Rejoined the encrypted room with the password remembered for this session",
     "passwordError": "Password incorrect",
     "alreadySecure": "Already in an encrypted room",
     "secureRoomActive": "Encrypted room - Password protection enabled",

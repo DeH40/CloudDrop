@@ -181,6 +181,7 @@
     "createSecureFailed": "创建加密房间失败",
     "alreadyTakenByOther": "该房间已被加密，请输入密码加入",
     "createSuccess": "加密房间创建成功",
+    "secureSessionRestored": "已用本次会话记住的密码重新加入加密房间",
     "passwordError": "密码错误",
     "alreadySecure": "当前已在加密房间中",
     "secureRoomActive": "加密房间 - 已启用密码保护",

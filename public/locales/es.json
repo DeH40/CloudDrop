@@ -182,6 +182,7 @@
     "createSecureFailed": "No se pudo crear la sala segura",
     "alreadyTakenByOther": "Esta sala ya está cifrada. Introduce su contraseña para unirte.",
     "createSuccess": "Sala cifrada creada exitosamente",
+    "secureSessionRestored": "Te has reincorporado a la sala cifrada con la contraseña recordada en esta sesión",
     "passwordError": "Contraseña incorrecta",
     "alreadySecure": "Ya está en una sala cifrada",
     "secureRoomActive": "Sala cifrada - Protección con contraseña habilitada",

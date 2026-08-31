@@ -180,6 +180,7 @@
     "createSecureFailed": "建立加密房間失敗",
     "alreadyTakenByOther": "該房間已被加密，請輸入密碼加入",
     "createSuccess": "加密房間建立成功",
+    "secureSessionRestored": "已用本次工作階段記住的密碼重新加入加密房間",
     "passwordError": "密碼錯誤",
     "alreadySecure": "目前已在加密房間中",
     "secureRoomActive": "加密房間 - 已啟用密碼保護",
