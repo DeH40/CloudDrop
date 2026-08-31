@@ -180,6 +180,7 @@
     "createSecureFailed": "暗号化ルームの作成に失敗しました",
     "alreadyTakenByOther": "このルームは既に暗号化されています。パスワードを入力して参加してください。",
     "createSuccess": "暗号化ルームが正常に作成されました",
+    "secureSessionRestored": "このセッションで記憶したパスワードで暗号化ルームに再参加しました",
     "passwordError": "パスワードが正しくありません",
     "alreadySecure": "すでに暗号化ルームにいます",
     "secureRoomActive": "暗号化ルーム - パスワード保護が有効",
