@@ -2505,16 +2505,7 @@ body::after {
     }
   }
 
-  /* Chat Panel 全屏优化 */
-  .chat-panel {
-    width: 100vw;
-    right: -100vw;
-    padding-top: var(--safe-area-top);
-  }
-
-  .chat-panel.active {
-    right: 0;
-  }
+  /* Chat Panel 全屏优化：见基础规则之后的 @media (max-width: 640px) 覆盖 */
 
   .chat-header {
     padding: var(--space-md);
@@ -3005,14 +2996,19 @@ body::after {
 .chat-panel {
   position: fixed;
   top: 0;
-  right: -400px;
+  right: 0;
   width: 400px;
   height: 100vh;
   background: var(--glass-panel-overlay), var(--bg-secondary);
   border-left: 1px solid var(--glass-border);
   display: flex;
   flex-direction: column;
-  transition: right var(--transition-slow);
+  /* 关闭态用 transform 移出视口而非负 right：
+     transform 走合成层动画，且 visibility: hidden 会连外阴影一起停止绘制，
+     避免固定定位的面板把 box-shadow 投射进视口右边缘（fixed 不受 body 的 overflow-x 裁剪）。 */
+  transform: translateX(100%);
+  visibility: hidden;
+  transition: transform var(--transition-slow), visibility var(--transition-slow);
   z-index: 2500;
   box-shadow: -12px 0 30px rgba(0, 0, 0, 0.45), var(--glass-inner);
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
@@ -3020,7 +3016,18 @@ body::after {
 }
 
 .chat-panel.active {
-  right: 0;
+  transform: translateX(0);
+  visibility: visible;
+}
+
+/* 移动端全屏。必须放在基础规则之后：同特异性下靠后者生效，
+   写在上方 @media (max-width: 640px) 里会被下面的 width: 400px 反向覆盖。 */
+@media (max-width: 640px) {
+  .chat-panel {
+    /* 用 100% 而非 100vw：100vw 含经典滚动条宽度，窄窗口下会让面板左侧溢出几像素 */
+    width: 100%;
+    padding-top: var(--safe-area-top);
+  }
 }
 
 .chat-header {
