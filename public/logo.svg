@@ -1,20 +1,41 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 80" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 292 80" width="292" height="80" fill="none">
   <title>CloudDrop Blue Portal</title>
+  <style>
+    /* 亮色为默认值；深色跟随浏览器 / 宿主页面的 color-scheme */
+    svg {
+      --plate: #FFFFFF;
+      --ink: #1C1917;
+      --g-from: #3B82F6;
+      --g-to: #8B5CF6;
+    }
+    @media (prefers-color-scheme: dark) {
+      svg {
+        --plate: #0D1117;
+        --ink: #F8FAFC;
+        --g-from: #60A5FA;
+        --g-to: #A78BFA;
+      }
+    }
+    .plate { fill: var(--plate); }
+    .wordmark { fill: var(--ink); }
+    .g-from { stop-color: var(--g-from); }
+    .g-to { stop-color: var(--g-to); }
+  </style>
   <defs>
     <linearGradient id="portal" x1="14" y1="14" x2="66" y2="66" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#3B82F6"/>
-      <stop offset="1" stop-color="#8B5CF6"/>
+      <stop class="g-from"/>
+      <stop class="g-to" offset="1"/>
     </linearGradient>
-    <linearGradient id="word" x1="201" y1="20" x2="344" y2="62" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#3B82F6"/>
-      <stop offset="1" stop-color="#8B5CF6"/>
+    <linearGradient id="word" x1="192" y1="26" x2="278" y2="53" gradientUnits="userSpaceOnUse">
+      <stop class="g-from"/>
+      <stop class="g-to" offset="1"/>
     </linearGradient>
   </defs>
-  <rect width="360" height="80" rx="16" fill="#FFFFFF"/>
+  <rect class="plate" width="292" height="80" rx="16"/>
   <g fill="url(#portal)" transform="translate(8 8)">
     <path d="M18 6h11v12h-7a4 4 0 0 0-4 4v20a4 4 0 0 0 4 4h7v12H18C11.373 58 6 52.627 6 46V18C6 11.373 11.373 6 18 6Z"/>
     <path d="M46 6H35v12h7a4 4 0 0 1 4 4v20a4 4 0 0 1-4 4h-7v12h11c6.627 0 12-5.373 12-12V18c0-6.627-5.373-12-12-12Z"/>
     <path d="m32 21 11 11-11 11-11-11 11-11Z"/>
   </g>
-  <text x="91" y="51" fill="#1C1917" font-family="Inter, Arial, 'PingFang SC', sans-serif" font-size="38" font-weight="700" letter-spacing="-1.5">Cloud<tspan fill="url(#word)">Drop</tspan></text>
+  <text class="wordmark" x="90" y="53" textLength="188" lengthAdjust="spacing" font-family="Inter, Arial, Helvetica, 'PingFang SC', sans-serif" font-size="38" font-weight="700">Cloud<tspan fill="url(#word)">Drop</tspan></text>
 </svg>
