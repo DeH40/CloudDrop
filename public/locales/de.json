@@ -178,6 +178,9 @@
       "noServerStorage": "Passwort wird nicht auf dem Server gespeichert"
     },
     "createSecureBtn": "Verschlüsselten Raum erstellen",
+    "creatingSecure": "Sicherer Raum wird erstellt…",
+    "createSecureFailed": "Sicherer Raum konnte nicht erstellt werden",
+    "alreadyTakenByOther": "Dieser Raum ist bereits verschlüsselt. Gib das Passwort ein, um beizutreten.",
     "createSuccess": "Verschlüsselter Raum erfolgreich erstellt",
     "passwordError": "Passwort falsch",
     "alreadySecure": "Bereits in einem verschlüsselten Raum",

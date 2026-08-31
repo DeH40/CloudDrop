@@ -11,6 +11,15 @@ import { debugLog } from './logger.js';
 import { ChatMixin } from './chat.js';
 import { SettingsMixin } from './settings.js';
 
+// 服务端拒绝设密时回的错误码。收到即视为创建加密房间失败，
+// 直接结束等待，不必干等 set-password-result 超时
+const SET_PASSWORD_REJECTIONS = new Set([
+  'FORBIDDEN',
+  'PASSWORD_ALREADY_SET',
+  'INVALID_PASSWORD_HASH',
+  'PASSWORD_REQUIRED'
+]);
+
 class CloudDrop {
   constructor() {
     this.peerId = null;
@@ -77,6 +86,8 @@ class CloudDrop {
     // 房间内设置密码（防抢注的创建流程）
     this._setPasswordPending = false;
     this._setPasswordResolve = null;
+    // 设密失败已自行提示，抑制 onclose(4002) 的通用密码错误提示
+    this._suppressCloseToast = false;
 
     // 每 peer 消息队列（保证 chunk 处理完成后才处理 file-end）
     this.peerMsgQueues = new Map();
@@ -249,6 +260,12 @@ class CloudDrop {
    * @param {string} password - Room password (min 6 characters)
    */
   async createSecureRoom(roomCode, password) {
+    // 兜底防重入（UI 忙态之外的调用路径）：并发设密会让先前的等待永久悬挂
+    if (this._setPasswordPending) {
+      debugLog('[App] 设密已在进行中，忽略重复请求');
+      return false;
+    }
+
     // Validate password
     if (!password || password.length < ROOM.PASSWORD_MIN_LENGTH) {
       ui.showToast(i18n.t('room.passwordMinLength'), 'error');
@@ -261,6 +278,7 @@ class CloudDrop {
       return false;
     }
 
+    let setPasswordTimer = null;
     try {
       // Generate password hash for server
       const passwordHash = await cryptoManager.hashPasswordForServer(password, roomCode);
@@ -279,7 +297,7 @@ class CloudDrop {
 
       const result = await new Promise((resolve) => {
         this._setPasswordResolve = resolve;
-        setTimeout(() => resolve({ success: false, error: 'TIMEOUT' }), 8000);
+        setPasswordTimer = setTimeout(() => resolve({ success: false, error: 'TIMEOUT' }), 8000);
       });
       this._setPasswordPending = false;
       this._setPasswordResolve = null;
@@ -289,18 +307,42 @@ class CloudDrop {
         return true;
       }
 
-      // 设置失败（房间已被他人加密/超时）：清理本地状态，回到密码输入流程
-      ui.showToast(result.error === 'TIMEOUT'
-        ? i18n.t('errors.connectionFailed')
-        : i18n.t('room.passwordError'), 'error');
+      // 设置失败（房间已被他人加密/超时）：清理本地状态，回到密码输入流程。
+      // 提示先于 close(4002) 发出，onclose 的通用提示会被这条更具体的原因抑制
+      ui.showToast(this.secureCreateErrorMessage(result.error), 'error');
       this.clearRoomPassword();
-      if (this.ws) this.ws.close(4002, 'password already set');
+      if (this.ws && this.ws.readyState !== WebSocket.CLOSED) {
+        this._suppressCloseToast = true;
+        this.ws.close(4002, 'set password failed');
+      }
+      // 创建已失败，别把创建弹窗留在密码输入框底下叠着
+      ui.hideModal('createSecureRoomModal');
       ui.showJoinRoomModal(roomCode, true);
       return false;
     } catch (error) {
       console.error('[App] Failed to create secure room:', error);
       ui.showToast(i18n.t('errors.connectionFailed'), 'error');
       return false;
+    } finally {
+      if (setPasswordTimer) clearTimeout(setPasswordTimer);
+      this._setPasswordPending = false;
+      this._setPasswordResolve = null;
+    }
+  }
+
+  /**
+   * 设密失败原因 -> 用户可读提示
+   * @param {string} error - 服务端错误码或 TIMEOUT
+   */
+  secureCreateErrorMessage(error) {
+    switch (error) {
+      case 'TIMEOUT':
+        return i18n.t('errors.connectionFailed');
+      case 'PASSWORD_ALREADY_SET':
+      case 'PASSWORD_REQUIRED':
+        return i18n.t('room.alreadyTakenByOther');
+      default:
+        return i18n.t('room.createSecureFailed');
     }
   }
 
@@ -449,6 +491,29 @@ class CloudDrop {
     ui.registerModal('fileDownloadModal', {
       onDismiss: () => this.cleanupDownloadModal()
     });
+
+    // 设密进行中不允许遮罩/Esc 关闭：房间已在切换，中途关窗会让用户
+    // 以为操作被取消，而后台仍在把房间设为加密
+    ui.registerModal('createSecureRoomModal', {
+      dismissible: () => !this._setPasswordPending
+    });
+  }
+
+  /**
+   * 创建加密房间的忙态：禁用提交/取消并显示进度，防重复提交
+   * @param {boolean} busy
+   */
+  setSecureCreateBusy(busy) {
+    const confirmBtn = document.getElementById('createSecureRoomConfirm');
+    if (confirmBtn) {
+      confirmBtn.disabled = busy;
+      confirmBtn.classList.toggle('is-busy', busy);
+      confirmBtn.setAttribute('aria-busy', busy ? 'true' : 'false');
+    }
+    for (const id of ['createSecureRoomCancel', 'createSecureRoomClose', 'secureRoomCode', 'secureRoomPassword']) {
+      const el = document.getElementById(id);
+      if (el) el.disabled = busy;
+    }
   }
 
   /**
@@ -795,6 +860,15 @@ class CloudDrop {
 
       // Handle server error frames
       if (message.type === 'error') {
+        // 设密被拒：立即结束 createSecureRoom 的等待，由它统一提示并回落到
+        // 密码输入流程；否则这里的通用处理会与 8 秒超时后的收尾互相打断
+        if (this._setPasswordResolve && SET_PASSWORD_REJECTIONS.has(message.error)) {
+          const resolve = this._setPasswordResolve;
+          this._setPasswordResolve = null;
+          resolve({ success: false, error: message.error });
+          return;
+        }
+
         switch (message.error) {
           case 'PASSWORD_REQUIRED':
           case 'PASSWORD_INCORRECT':
@@ -869,7 +943,12 @@ class CloudDrop {
       if (event.code === 4001 || event.code === 4002) {
         // Password error - don't auto-reconnect
         ui.updateConnectionStatus('disconnected');
-        ui.showToast(event.code === 4001 ? i18n.t('room.passwordRequired') : i18n.t('room.passwordError'), 'error');
+        // 设密失败已给出更具体的原因，别再叠一条通用提示
+        if (this._suppressCloseToast) {
+          this._suppressCloseToast = false;
+        } else {
+          ui.showToast(event.code === 4001 ? i18n.t('room.passwordRequired') : i18n.t('room.passwordError'), 'error');
+        }
         this.clearRoomPassword();
         // 关闭旧 P2P 连接并清空设备列表：房间已被锁定，旧链路全部作废
         this.webrtc?.closeAll();
@@ -2008,6 +2087,10 @@ class CloudDrop {
     document.getElementById('createSecureRoomClose')?.addEventListener('click', () => ui.hideModal('createSecureRoomModal'));
     document.getElementById('createSecureRoomCancel')?.addEventListener('click', () => ui.hideModal('createSecureRoomModal'));
     document.getElementById('createSecureRoomConfirm')?.addEventListener('click', async () => {
+      // 设密要等服务端"在场满 3 秒"，期间必须挡住二次提交：
+      // 重复走一遍 switchRoom 会丢弃第一次的等待并被已设密的房间拒绝
+      if (this._setPasswordPending) return;
+
       const roomCode = document.getElementById('secureRoomCode').value.trim().toUpperCase();
       const password = document.getElementById('secureRoomPassword').value;
 
@@ -2021,11 +2104,16 @@ class CloudDrop {
         return;
       }
 
-      const success = await this.createSecureRoom(roomCode, password);
-      if (success) {
-        ui.hideModal('createSecureRoomModal');
-        ui.showToast(i18n.t('room.createSuccess'), 'success');
-        // 房间切换由 createSecureRoom 内部完成（加入后通过房间内信令设置密码）
+      this.setSecureCreateBusy(true);
+      try {
+        const success = await this.createSecureRoom(roomCode, password);
+        if (success) {
+          ui.hideModal('createSecureRoomModal');
+          ui.showToast(i18n.t('room.createSuccess'), 'success');
+          // 房间切换由 createSecureRoom 内部完成（加入后通过房间内信令设置密码）
+        }
+      } finally {
+        this.setSecureCreateBusy(false);
       }
     });
 

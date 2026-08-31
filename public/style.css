@@ -2025,6 +2025,37 @@ body::after {
   color: var(--text-primary);
 }
 
+/* 忙态：长耗时操作（如设密要等服务端"在场满 3 秒"）必须给出可见反馈，
+   否则用户会以为按钮没响应并重复提交 */
+.btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.btn:disabled:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.btn .btn-spinner,
+.btn .btn-busy-label {
+  display: none;
+}
+
+.btn.is-busy .btn-idle-icon,
+.btn.is-busy .btn-idle-label {
+  display: none;
+}
+
+.btn.is-busy .btn-spinner {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+
+.btn.is-busy .btn-busy-label {
+  display: inline;
+}
+
 /* ============================================
    Toast Notifications
    ============================================ */
