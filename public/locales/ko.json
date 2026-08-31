@@ -176,6 +176,9 @@
       "noServerStorage": "비밀번호는 서버에 저장되지 않음"
     },
     "createSecureBtn": "암호화된 방 만들기",
+    "creatingSecure": "암호화 방 생성 중…",
+    "createSecureFailed": "암호화 방 생성 실패",
+    "alreadyTakenByOther": "이 방은 이미 암호화되어 있습니다. 비밀번호를 입력해 참여하세요.",
     "createSuccess": "암호화된 방이 성공적으로 생성됨",
     "passwordError": "비밀번호가 올바르지 않음",
     "alreadySecure": "이미 암호화된 방에 있습니다",

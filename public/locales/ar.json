@@ -182,6 +182,9 @@
       "noServerStorage": "كلمة المرور لا تُخزن على الخادم"
     },
     "createSecureBtn": "إنشاء غرفة مشفرة",
+    "creatingSecure": "جارٍ إنشاء غرفة مشفَّرة…",
+    "createSecureFailed": "فشل إنشاء الغرفة المشفَّرة",
+    "alreadyTakenByOther": "هذه الغرفة مشفَّرة بالفعل. أدخل كلمة المرور للانضمام.",
     "createSuccess": "تم إنشاء الغرفة المشفرة بنجاح",
     "passwordError": "كلمة المرور غير صحيحة",
     "alreadySecure": "أنت بالفعل في غرفة مشفرة",

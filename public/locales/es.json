@@ -178,6 +178,9 @@
       "noServerStorage": "Contraseña no almacenada en servidor"
     },
     "createSecureBtn": "Crear sala cifrada",
+    "creatingSecure": "Creando sala segura…",
+    "createSecureFailed": "No se pudo crear la sala segura",
+    "alreadyTakenByOther": "Esta sala ya está cifrada. Introduce su contraseña para unirte.",
     "createSuccess": "Sala cifrada creada exitosamente",
     "passwordError": "Contraseña incorrecta",
     "alreadySecure": "Ya está en una sala cifrada",

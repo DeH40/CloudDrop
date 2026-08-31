@@ -177,6 +177,9 @@
       "noServerStorage": "密码不会被服务器存储"
     },
     "createSecureBtn": "创建加密房间",
+    "creatingSecure": "正在创建加密房间…",
+    "createSecureFailed": "创建加密房间失败",
+    "alreadyTakenByOther": "该房间已被加密，请输入密码加入",
     "createSuccess": "加密房间创建成功",
     "passwordError": "密码错误",
     "alreadySecure": "当前已在加密房间中",

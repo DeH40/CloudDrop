@@ -178,6 +178,9 @@
       "noServerStorage": "Mot de passe non stocké sur le serveur"
     },
     "createSecureBtn": "Créer une salle chiffrée",
+    "creatingSecure": "Création du salon sécurisé…",
+    "createSecureFailed": "Échec de la création du salon sécurisé",
+    "alreadyTakenByOther": "Ce salon est déjà chiffré. Saisissez son mot de passe pour le rejoindre.",
     "createSuccess": "Salle chiffrée créée avec succès",
     "passwordError": "Mot de passe incorrect",
     "alreadySecure": "Déjà dans une salle chiffrée",

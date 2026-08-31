@@ -176,6 +176,9 @@
       "noServerStorage": "パスワードはサーバーに保存されません"
     },
     "createSecureBtn": "暗号化ルームを作成",
+    "creatingSecure": "暗号化ルームを作成中…",
+    "createSecureFailed": "暗号化ルームの作成に失敗しました",
+    "alreadyTakenByOther": "このルームは既に暗号化されています。パスワードを入力して参加してください。",
     "createSuccess": "暗号化ルームが正常に作成されました",
     "passwordError": "パスワードが正しくありません",
     "alreadySecure": "すでに暗号化ルームにいます",
